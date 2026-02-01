@@ -21,4 +21,102 @@ def get_profile_section(section_name: Literal["activities", "awards", "certifica
     except Exception as e:
         return f"Error retrieving section {section_name}: {str(e)}"
 
-tools = [get_profile_section]
+PROJECTS_DIR = os.path.join(PERSONAL_DATA_DIR, "projects")
+
+def list_projects() -> str:
+    """Returns a list of available projects with their descriptions."""
+    try:
+        if not os.path.exists(PROJECTS_DIR):
+            return "No projects directory found."
+        
+        project_list = []
+        for filename in os.listdir(PROJECTS_DIR):
+            if filename.endswith(".md"):
+                project_id = filename.replace(".md", "")
+                file_path = os.path.join(PROJECTS_DIR, filename)
+                
+                try:
+                    with open(file_path, "r") as f:
+                        content = f.read()
+                        
+                    # Extract frontmatter
+                    if content.startswith("---"):
+                        parts = content.split("---", 2)
+                        if len(parts) >= 3:
+                            frontmatter = yaml.safe_load(parts[1])
+                            title = frontmatter.get("title", project_id)
+                            description = frontmatter.get("description", "No description available.")
+                            project_list.append(f"- {project_id}: {title} - {description}")
+                        else:
+                            project_list.append(f"- {project_id}: (No metadata)")
+                    else:
+                        project_list.append(f"- {project_id}")
+                except Exception:
+                    project_list.append(f"- {project_id}")
+
+        if not project_list:
+            return "No projects available."
+        
+        return "\n".join(project_list)
+    except Exception as e:
+        return f"Error listing projects: {str(e)}"
+
+def get_project_details(project_id: str) -> str:
+    """Retrieves the details of a specific project by its ID (filename without extension)."""
+    try:
+        # Security: Prevent traversal
+        if ".." in project_id or "/" in project_id:
+            return "Error: Invalid project ID."
+            
+        file_path = os.path.join(PROJECTS_DIR, f"{project_id}.md")
+        if not os.path.exists(file_path):
+            return f"Error: Project '{project_id}' not found. Use list_projects() to see available ID."
+        
+        with open(file_path, "r") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error retrieving project {project_id}: {str(e)}"
+
+def search_projects(query: str) -> str:
+    """Searches for projects containing the query string (keyword). Returns Title and Description of matches."""
+    try:
+        if not os.path.exists(PROJECTS_DIR):
+            return "No projects directory found."
+        
+        results = []
+        query = query.lower()
+        
+        for filename in os.listdir(PROJECTS_DIR):
+            if filename.endswith(".md"):
+                project_id = filename.replace(".md", "")
+                file_path = os.path.join(PROJECTS_DIR, filename)
+                
+                try:
+                    with open(file_path, "r") as f:
+                        content = f.read()
+                    
+                    # Search (case-insensitive)
+                    if query in content.lower():
+                        # Extract metadata for result
+                        title = project_id
+                        description = "No description"
+                        
+                        if content.startswith("---"):
+                            parts = content.split("---", 2)
+                            if len(parts) >= 3:
+                                frontmatter = yaml.safe_load(parts[1])
+                                title = frontmatter.get("title", project_id)
+                                description = frontmatter.get("description", "No description")
+                        
+                        results.append(f"- {title} (ID: {project_id}): {description}")
+                except Exception:
+                    continue
+
+        if not results:
+            return f"No projects found matching '{query}'."
+            
+        return "\n".join(results)
+    except Exception as e:
+        return f"Error searching projects: {str(e)}"
+
+tools = [get_profile_section, list_projects, get_project_details, search_projects]
