@@ -1,0 +1,23 @@
+- role: "Foundation: Introduction to LangGraph (LangChain Academy)"
+  company: "LangChain"
+  url: "https://academy.langchain.com/certificates/ybeenlniby"
+  location: "Online"
+  date: "August 2025"
+  description: |
+    Learned to build agentic and multi-agent applications using the LangGraph framework for precise workflow control.
+  technologies:
+    - "LangGraph"
+    - "AI Agents"
+    - "LLMOps"
+    - "LangChain"
+    - "Large Language Models (LLM)"
+
+- role: "AWS Cloud Technical Essentials"
+  company: "Amazon Web Services (Coursera)"
+  url: "https://www.coursera.org/account/accomplishments/verify/HTXZ55EAU69Y"
+  location: "Online"
+  date: "July 2024"
+  description: |
+    Gained foundational knowledge of AWS services, including compute, storage, databases, and security concepts like IAM.
+  technologies:
+    - "aws"

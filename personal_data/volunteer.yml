@@ -1,0 +1,15 @@
+- role: "Team Member"
+  company: "GDG (Google Developer Groups) on Campus PoliMi"
+  url: "https://gdg.community.dev/gdg-on-campus-polytechnic-university-of-milan/"
+  location: "Milano, IT"
+  date: "September 2025 - Present"
+  description: |
+    Supporting organization and promotion of tech events, workshops, and hackathons for student developers, fostering Google tech engagement.
+
+- role: "Digital Technologies Manager"
+  company: "Associazione musicale Arianna Alberighi - Music school of Tresigallo"
+  url: "https://www.filarmonicatresigallo.it/"
+  location: "Tresigallo, IT"
+  date: "2016 - Present"
+  description: |
+    Development of the association’s website, management of the Google Workspace, development of the web portal for managing members and students of the music school.
