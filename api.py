@@ -1,3 +1,5 @@
+import os
+import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -6,15 +8,13 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 from usage_utils import get_today_model_usage
-import os
-
 import uvicorn
 from agent import graph
 
 # Load env vars
 load_dotenv()
 
-import logging
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,9 @@ app.add_middleware(
         "http://localhost:8001",
         "http://127.0.0.1:8001",
         "http://localhost:8002",
-        "http://127.0.0.1:8002"
+        "http://127.0.0.1:8002",
+        "https://marcellomartini.tech",
+        "https://www.marcellomartini.tech"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -84,4 +86,5 @@ async def chat(request: Request, chat_request: ChatRequest):
         raise HTTPException(status_code=500, detail=error_str)
 
 if __name__ == "__main__":
+    # Local development default
     uvicorn.run(app, host="0.0.0.0", port=8000)
