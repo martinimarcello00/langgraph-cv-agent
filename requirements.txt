@@ -6,3 +6,4 @@ slowapi
 pyyaml
 pydantic
 python-dotenv
+requests

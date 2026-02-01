@@ -5,12 +5,18 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
+from usage_utils import get_today_model_usage
+import os
 
 import uvicorn
 from agent import graph
 
 # Load env vars
 load_dotenv()
+
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Setup Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -48,6 +54,18 @@ class ChatRequest(BaseModel):
 @limiter.limit("5/minute")
 async def chat(request: Request, chat_request: ChatRequest):
     try:
+        # Check Token Usage
+        daily_limit = int(os.getenv("DAILY_TOKEN_LIMIT", "50000"))
+        if daily_limit > 0:
+            usage = get_today_model_usage("gpt-5-nano")
+            current_tokens = usage.get("total_tokens", 0)
+            logger.info(f"Token Usage Check: {current_tokens}/{daily_limit}")
+            
+            if current_tokens >= daily_limit:
+                logger.warning("Daily token limit exceeded!")
+                # Funny message as requested
+                return {"response": "I'm currently overwhelmed with fame (and API token limits). I'm too busy right now, try again tomorrow!"}
+
         inputs = {"messages": [("user", chat_request.message)]}
         config = {"configurable": {"thread_id": chat_request.thread_id}}
         
@@ -59,6 +77,7 @@ async def chat(request: Request, chat_request: ChatRequest):
         return {"response": last_msg.content}
         
     except Exception as e:
+        logger.error(f"Error processing chat request: {e}", exc_info=True)
         error_str = str(e)
         if "RESOURCE_EXHAUSTED" in error_str:
             raise HTTPException(status_code=429, detail="ops., too many people are asking infos about me! Try later")
