@@ -1,50 +1,59 @@
-"""Utilities for querying OpenAI usage metrics."""
+"""
+Utilities for querying OpenAI usage metrics.
+Provides functions to track token usage for specific models.
+"""
 from __future__ import annotations
 
 import datetime
 import logging
 import os
-from typing import Dict, Optional
-
 import requests
+from typing import Dict, Optional, Union, List, Tuple, Any
 
+# --- Initialization ---
 logger = logging.getLogger(__name__)
 
+# --- Constants ---
+USAGE_API_URL = "https://api.openai.com/v1/organization/usage/completions"
+
+# --- Functions ---
 
 def get_today_completions_usage(
     bucket_width: str = "1d",
-    raw_output: Optional[bool] = False,
+    raw_output: bool = False,
     by_model: bool = False,
-) -> Dict[str, int] | Dict[str, Dict[str, int]]:
-    """Return today's organization usage for the completions endpoint.
+) -> Union[Dict[str, int], Dict[str, Dict[str, int]]]:
+    """
+    Return today's organization usage for the completions endpoint.
 
     Args:
-        bucket_width: Width of the aggregation bucket passed to the API (e.g., "1d", "1h").
-        raw_output: When True, return the raw JSON response from the API.
-        by_model: When True, return usage grouped by model (dict keyed by model name).
+        bucket_width: Width of the aggregation bucket (e.g., "1d", "1h").
+        raw_output: If True, returns the raw JSON response.
+        by_model: If True, returns usage grouped by model.
 
     Returns:
-        - Default: Dict with ``input_tokens``, ``output_tokens`` and ``total_tokens``.
-        - If ``by_model=True``: Dict[str, Dict[str, int]] mapping model -> token breakdown.
+        Dict: Usage statistics containing 'input_tokens', 'output_tokens', 'total_tokens'.
+              If by_model is True, returns a nested dict keyed by model name.
     """
     api_key = os.getenv("OPENAI_ADMIN_API_KEY") or os.getenv("OPENAI_API_KEY")
 
     if not api_key:
-        logger.error("OPENAI_API_KEY environment variable is missing.")
+        logger.error("OPENAI_API_KEY or OPENAI_ADMIN_API_KEY environment variable is missing.")
         return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-    start_dt = datetime.datetime.now(datetime.UTC).replace(
+    # Calculate timeframe for "today" (UTC)
+    start_dt = datetime.datetime.now(datetime.timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
     end_dt = start_dt + datetime.timedelta(days=1)
 
-    params: list[tuple[str, int | str]] = [
+    # API Parameters
+    params: List[Tuple[str, Union[int, str]]] = [
         ("start_time", int(start_dt.timestamp())),
         ("end_time", int(end_dt.timestamp())),
         ("bucket_width", bucket_width),
     ]
 
-    # Request grouping by model when desired (API may aggregate per-model results)
     if by_model:
         params.append(("group_by", "model"))
 
@@ -55,10 +64,10 @@ def get_today_completions_usage(
 
     try:
         response = requests.get(
-            "https://api.openai.com/v1/organization/usage/completions",
+            USAGE_API_URL,
             params=params,
             headers=headers,
-            timeout=5,
+            timeout=10, 
         )
 
         response.raise_for_status()
@@ -67,98 +76,102 @@ def get_today_completions_usage(
         if raw_output:
             return json_response
 
-        # Defensive parsing of results
+        # Parse results
         data = json_response.get("data", [])
         if not data:
-            # No data present
-            if by_model:
-                return {}
-            return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+            return {} if by_model else {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
         results = data[0].get("results", [])
 
         if by_model:
-            # Group usage by model (sum across result buckets if multiple)
-            usage_by_model: Dict[str, Dict[str, int]] = {}
-            for r in results:
-                model_name = (
-                    r.get("model")
-                    or r.get("name")
-                    or r.get("model_name")
-                    or "unknown"
-                )
-                in_toks = int(r.get("input_tokens", 0) or 0)
-                out_toks = int(r.get("output_tokens", 0) or 0)
-                if model_name not in usage_by_model:
-                    usage_by_model[model_name] = {
-                        "input_tokens": 0,
-                        "output_tokens": 0,
-                        "total_tokens": 0,
-                    }
-                usage_by_model[model_name]["input_tokens"] += in_toks
-                usage_by_model[model_name]["output_tokens"] += out_toks
-                usage_by_model[model_name]["total_tokens"] += in_toks + out_toks
-            return usage_by_model
+            return _aggregate_usage_by_model(results)
+        
+        return _aggregate_total_usage(results)
 
-        # Default behavior: return aggregate figures if available
-        if len(results) > 0:
-            input_tokens = int(results[0].get("input_tokens", 0) or 0)
-            output_tokens = int(results[0].get("output_tokens", 0) or 0)
-            return {
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "total_tokens": input_tokens + output_tokens,
-            }
-
+    except requests.exceptions.RequestException as e:
+        logger.error(f"HTTP Request failed for usage data: {e}")
     except Exception as e:
-        logger.error(f"Error fetching usage: {e}")
-        # Default to 0 usage on error so we don't block traffic if usage API is down
-        if by_model:
-            return {}
-        return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        logger.error(f"Unexpected error fetching usage data: {e}")
 
-    # If no results, return zero usage
+    # Fallback return on error
+    return {} if by_model else {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+
+def _aggregate_usage_by_model(results: List[Dict[str, Any]]) -> Dict[str, Dict[str, int]]:
+    """Helper to aggregate raw usage results by model."""
+    usage_by_model: Dict[str, Dict[str, int]] = {}
+    
+    for r in results:
+        model_name = r.get("model") or r.get("name") or r.get("model_name") or "unknown"
+        input_tokens = int(r.get("input_tokens") or 0)
+        output_tokens = int(r.get("output_tokens") or 0)
+        
+        if model_name not in usage_by_model:
+            usage_by_model[model_name] = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+            }
+            
+        usage_by_model[model_name]["input_tokens"] += input_tokens
+        usage_by_model[model_name]["output_tokens"] += output_tokens
+        usage_by_model[model_name]["total_tokens"] += input_tokens + output_tokens
+        
+    return usage_by_model
+
+
+def _aggregate_total_usage(results: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Helper to aggregate raw usage results into a single total."""
+    if not results:
+        return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        
+    # The API typically returns one result object for the aggregate view, 
+    # but defensive coding uses the first one.
+    first_res = results[0]
+    input_tokens = int(first_res.get("input_tokens") or 0)
+    output_tokens = int(first_res.get("output_tokens") or 0)
+    
     return {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": input_tokens + output_tokens,
     }
 
 
 def get_today_model_usage(model_name: str, bucket_width: str = "1d") -> Dict[str, int]:
-    """Return today's token usage for a specific model.
-
-    Performs a per-model aggregation using ``get_today_completions_usage`` with
-    ``by_model=True`` and returns a zeroed usage dict if the model is not found
-    or the API provides no data.
+    """
+    Return today's token usage for a specific model (or partial match).
 
     Args:
-        model_name: Exact model identifier to look up (e.g., "gpt-5-mini").
-        bucket_width: Aggregation bucket width (default "1d").
+        model_name: Model identifier (e.g., "gpt-5-mini").
+        bucket_width: Aggregation bucket width.
 
     Returns:
-        Dict with keys ``input_tokens``, ``output_tokens``, ``total_tokens``.
+        Dict: {'input_tokens': int, 'output_tokens': int, 'total_tokens': int}
     """
     try:
-        usage = get_today_completions_usage(bucket_width=bucket_width, by_model=True)
+        # Force type cast because we know it returns a dict of dicts when by_model=True
+        usage = get_today_completions_usage(bucket_width=bucket_width, by_model=True) # type: ignore
     except Exception as exc:
         logger.error("Failed to retrieve usage data: %s", exc)
         return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-    if not isinstance(usage, dict):  # Defensive: unexpected type
+    if not isinstance(usage, dict):
         return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-    # Allow partial matching: e.g. "gpt-5-mini" matches "gpt-5-mini-2025-08-07"
-    # Aggregate across all matching keys (case-insensitive substring containment)
+    # Aggregate usage for any key containing the model_name (case-insensitive)
     target_lower = model_name.lower()
     aggregate = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    
+    found_match = False
     for key, stats in usage.items():
-        if not isinstance(stats, dict):
-            continue
-        if target_lower in key.lower():
-            aggregate["input_tokens"] += int(stats.get("input_tokens", 0) or 0)
-            aggregate["output_tokens"] += int(stats.get("output_tokens", 0) or 0)
-            aggregate["total_tokens"] += int(stats.get("total_tokens", 0) or 0)
+        if isinstance(stats, dict) and target_lower in key.lower():
+            found_match = True
+            aggregate["input_tokens"] += int(stats.get("input_tokens", 0))
+            aggregate["output_tokens"] += int(stats.get("output_tokens", 0))
+            aggregate["total_tokens"] += int(stats.get("total_tokens", 0))
 
-    # If nothing matched, return zeros
+    if not found_match:
+        logger.debug(f"No usage found for model matching '{model_name}'")
+
     return aggregate
