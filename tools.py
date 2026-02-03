@@ -29,7 +29,7 @@ def get_profile_section(section_name: Literal["activities", "awards", "certifica
     Retrieves a specific section of the user's profile data (YAML).
     """
     try:
-        file_path = os.path.join(Config.PERSONAL_DATA_DIR, f"{section_name}.yml")
+        file_path = os.path.join(PERSONAL_DATA_DIR, f"{section_name}.yml")
         
         if not os.path.exists(file_path):
             logger.warning(f"Profile section not found: {section_name}")
@@ -49,17 +49,17 @@ def list_projects() -> str:
     Returns a list of available projects with their descriptions.
     """
     try:
-        if not os.path.exists(Config.PROJECTS_DIR):
+        if not os.path.exists(PROJECTS_DIR):   
             logger.warning("Projects directory missing.")
             return "No projects directory found."
         
         project_list = []
         
         # Iterate over markdown files in the projects directory
-        for filename in sorted(os.listdir(Config.PROJECTS_DIR)):
+        for filename in sorted(os.listdir(PROJECTS_DIR)):
             if filename.endswith(".md"):
                 project_id = filename.replace(".md", "")
-                file_path = os.path.join(Config.PROJECTS_DIR, filename)
+                file_path = os.path.join(PROJECTS_DIR, filename)
                 
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
@@ -101,7 +101,7 @@ def get_project_details(project_id: str) -> str:
             logger.warning(f"Invalid project ID attempt: {project_id}")
             return "Error: Invalid project ID."
             
-        file_path = os.path.join(Config.PROJECTS_DIR, f"{project_id}.md")
+        file_path = os.path.join(PROJECTS_DIR, f"{project_id}.md")
         
         if not os.path.exists(file_path):
             return f"Error: Project '{project_id}' not found. Use list_projects() to see available IDs."
@@ -118,14 +118,14 @@ def search_projects(query: str) -> str:
     Searches for projects using RAG (Vector Search).
     """
     try:
-        if not os.path.exists(Config.CHROMA_DB_DIR):
+        if not os.path.exists(CHROMA_DB_DIR):
             return "Error: ChromaDB index not found. Please run 'create_rag.ipynb' to generate the index."
             
         # Initialize Embeddings
-        embeddings = HuggingFaceEmbeddings(model_name=Config.EMBEDDING_MODEL_NAME)
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
         
         # Load Vector Store
-        vectorstore = Chroma(persist_directory=Config.CHROMA_DB_DIR, embedding_function=embeddings)
+        vectorstore = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
         
         # Perform Search
         results = vectorstore.similarity_search(query, k=3)
