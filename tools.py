@@ -2,6 +2,12 @@ import os
 import yaml
 from typing import Literal
 from dotenv import load_dotenv
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+
+# Configuration for RAG
+CHROMA_DB_DIR = "./chroma_db"
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 # Load env vars
 load_dotenv()
@@ -78,44 +84,31 @@ def get_project_details(project_id: str) -> str:
         return f"Error retrieving project {project_id}: {str(e)}"
 
 def search_projects(query: str) -> str:
-    """Searches for projects containing the query string (keyword). Returns Title and Description of matches."""
+    """Searches for projects using RAG (Vector Search). Returns relevant project chunks."""
     try:
-        if not os.path.exists(PROJECTS_DIR):
-            return "No projects directory found."
+        if not os.path.exists(CHROMA_DB_DIR):
+            return "Error: ChromaDB index not found. Please run 'create_rag.ipynb' to generate the index."
+            
+        # Initialize Embeddings (must match what was used for indexing)
+        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
         
-        results = []
-        query = query.lower()
+        # Load Vector Store
+        vectorstore = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
         
-        for filename in os.listdir(PROJECTS_DIR):
-            if filename.endswith(".md"):
-                project_id = filename.replace(".md", "")
-                file_path = os.path.join(PROJECTS_DIR, filename)
-                
-                try:
-                    with open(file_path, "r") as f:
-                        content = f.read()
-                    
-                    # Search (case-insensitive)
-                    if query in content.lower():
-                        # Extract metadata for result
-                        title = project_id
-                        description = "No description"
-                        
-                        if content.startswith("---"):
-                            parts = content.split("---", 2)
-                            if len(parts) >= 3:
-                                frontmatter = yaml.safe_load(parts[1])
-                                title = frontmatter.get("title", project_id)
-                                description = frontmatter.get("description", "No description")
-                        
-                        results.append(f"- {title} (ID: {project_id}): {description}")
-                except Exception:
-                    continue
-
+        # Perform Search
+        results = vectorstore.similarity_search(query, k=3)
+        
         if not results:
             return f"No projects found matching '{query}'."
             
-        return "\n".join(results)
+        formatted_results = []
+        for doc in results:
+            source = doc.metadata.get("source", "Unknown Source")
+            content = doc.page_content
+            formatted_results.append(f"Source: {source}\nContent: {content}\n---")
+            
+        return "\n".join(formatted_results)
+        
     except Exception as e:
         return f"Error searching projects: {str(e)}"
 

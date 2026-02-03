@@ -1,3 +1,4 @@
+langchain
 langgraph
 langchain-openai
 fastapi
@@ -7,3 +8,12 @@ pyyaml
 pydantic
 python-dotenv
 requests
+chromadb
+tiktoken
+unstructured[md]
+langchain_community
+langchain-text-splitters
+langchain-huggingface
+sentence-transformers
+langchain_chroma
+tqdm
