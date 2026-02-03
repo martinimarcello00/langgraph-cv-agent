@@ -2,6 +2,11 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+# Install system dependencies including libmagic
+RUN apt-get update && apt-get install -y \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements
 COPY requirements.txt .
 
@@ -12,7 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create a user to avoid running as root (good practice, often required)
-RUN useradd -m -u 1000 user
+RUN useradd -m -u 1000 user \
+    && chown -R user:user /app
+
 USER user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH
