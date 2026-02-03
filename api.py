@@ -9,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 from usage_utils import get_today_model_usage
 import uvicorn
+import gradio as gr
 from agent import graph
 
 # Load env vars
@@ -84,6 +85,12 @@ async def chat(request: Request, chat_request: ChatRequest):
         if "RESOURCE_EXHAUSTED" in error_str:
             raise HTTPException(status_code=429, detail="ops., too many people are asking infos about me! Try later")
         raise HTTPException(status_code=500, detail=error_str)
+
+
+# --- Gradio Chat Interface ---
+from ui import demo
+
+app = gr.mount_gradio_app(app, demo, path="/")
 
 if __name__ == "__main__":
     # Local development default
