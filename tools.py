@@ -1,23 +1,26 @@
 import os
 import yaml
 import logging
-from typing import Literal, List, Dict, Any, Optional
+from typing import Literal
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
-
-# --- Configuration ---
-class Config:
-    """Centralized configuration for paths and models."""
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    PERSONAL_DATA_DIR = os.path.join(BASE_DIR, "personal_data")
-    PROJECTS_DIR = os.path.join(PERSONAL_DATA_DIR, "projects")
-    CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
-    EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+import requests
 
 # --- Initialization ---
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+
+# --- Configuration ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PERSONAL_DATA_DIR = os.path.join(BASE_DIR, "personal_data")
+PROJECTS_DIR = os.path.join(PERSONAL_DATA_DIR, "projects")
+CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+MAILGUN_URL = os.getenv("MAILGUN_URL")
+MAILGUN_FROM = os.getenv("MAILGUN_SENDER")
 
 # --- Tools ---
 
@@ -142,5 +145,37 @@ def search_projects(query: str) -> str:
         logger.error(f"Error searching projects: {e}")
         return f"Error searching projects: {str(e)}"
 
+def send_cv_email(email_address: str) -> str:
+    """
+    Sends Marcello's CV to the specified email address.
+    """
+    try:
+        # Basic validation
+        if "@" not in email_address or "." not in email_address:
+             return "Error: Invalid email address format. Please provide a valid email."
+             
+        response = requests.post(
+            MAILGUN_URL,
+            auth=("api", MAILGUN_API_KEY),
+            data={
+                "from": MAILGUN_FROM,
+                "to": email_address,
+                "subject": "Hello from Marcello Martini",
+                "template": "send cv",
+                "h:X-Mailgun-Variables": '{"test": "test"}' 
+            },
+            timeout=10
+        )
+        
+        response.raise_for_status()
+        return f"CV successfully sent to {email_address}!"
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Mailgun API Error: {e}")
+        return f"Error sending email: Failed to connect to mail service." 
+    except Exception as e:
+        logger.error(f"Unexpected error in send_cv_email: {e}")
+        return f"Error sending email: {str(e)}"
+
 # Export the list of tools for the agent
-tools = [get_profile_section, list_projects, get_project_details, search_projects]
+tools = [get_profile_section, list_projects, get_project_details, search_projects, send_cv_email]

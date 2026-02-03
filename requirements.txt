@@ -18,3 +18,4 @@ sentence-transformers
 langchain_chroma
 tqdm
 gradio
+requests
