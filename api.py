@@ -69,7 +69,7 @@ async def chat(request: Request, chat_request: ChatRequest):
                 return {"response": "I'm currently overwhelmed with fame (and API token limits). I'm too busy right now, try again tomorrow!"}
 
         inputs = {"messages": [("user", chat_request.message)]}
-        config = {"configurable": {"thread_id": chat_request.thread_id}}
+        config = {"configurable": {"thread_id": chat_request.thread_id}, "run_name": "CV Agent"}
         
         # Run graph with persistence
         result = await graph.ainvoke(inputs, config=config)

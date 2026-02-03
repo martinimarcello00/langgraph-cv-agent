@@ -208,3 +208,6 @@ __marimo__/
 
 # Mac dstore
 .DS_Store
+
+# Ignore ChromaDB since it's created 
+chroma_db/

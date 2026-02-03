@@ -21,4 +21,4 @@ ENV HOME=/home/user \
 EXPOSE 7860
 
 # Run the application
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["/bin/bash", "-c", "python build_rag.py && uvicorn api:app --host 0.0.0.0 --port 7860"]
