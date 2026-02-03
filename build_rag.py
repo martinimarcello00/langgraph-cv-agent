@@ -27,7 +27,7 @@ def build_rag():
         return
 
     # Split documents
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(documents)
     print(f"✂️  Split into {len(chunks)} chunks")
 
