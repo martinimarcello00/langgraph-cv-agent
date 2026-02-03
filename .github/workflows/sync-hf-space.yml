@@ -1,5 +1,7 @@
 name: Sync to Hugging Face hub
 on:
+  
+  # to run every time I push a commit into the main branch
   push:
     branches: [main]
 
