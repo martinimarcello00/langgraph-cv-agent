@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import requests
 from functools import lru_cache
 from langchain_community.retrievers import BM25Retriever
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 # --- Initialization ---
 load_dotenv()
