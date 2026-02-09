@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import requests
 from functools import lru_cache
 from langchain_community.retrievers import BM25Retriever
+from langchain.schema import Document
 
 # --- Initialization ---
 load_dotenv()
@@ -185,7 +186,6 @@ def search_projects(query: str) -> str:
         all_docs_data = vectorstore.get()
         
         # Create documents list for BM25
-        from langchain.schema import Document
         all_docs = []
         if all_docs_data and 'documents' in all_docs_data and 'metadatas' in all_docs_data:
             for i, doc_text in enumerate(all_docs_data['documents']):
@@ -214,18 +214,18 @@ def search_projects(query: str) -> str:
         vector_results = vector_retriever.get_relevant_documents(query)
         
         # Combine and deduplicate results
-        # Weight: 30% BM25, 70% Vector (by taking more from vector)
+        # Weight: 60% Vector (semantic), 40% BM25 (keywords) - taking top 3 and 2 respectively
         combined_results = []
         seen_content = set()
         
-        # Add vector results first (higher weight)
+        # Add vector results first (higher weight - 60%)
         for doc in vector_results[:3]:  # Take top 3 from vector
             content_key = doc.page_content.strip()[:100]
             if content_key not in seen_content:
                 combined_results.append(doc)
                 seen_content.add(content_key)
         
-        # Add BM25 results to fill gaps
+        # Add BM25 results to fill gaps (40%)
         for doc in bm25_results[:2]:  # Take top 2 from BM25
             content_key = doc.page_content.strip()[:100]
             if content_key not in seen_content:

@@ -56,8 +56,8 @@ def build_rag():
     # Then apply character-based chunking with optimized parameters
     print("✂️ Applying recursive text splitting...")
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=600,  # Reduced from 1000 for better precision
-        chunk_overlap=100,  # Reduced from 200
+        chunk_size=600,  # Optimized for better precision
+        chunk_overlap=100,  # Balance between context and performance
         separators=["\n\n", "\n", ". ", " ", ""],
         length_function=len
     )
@@ -86,7 +86,7 @@ def build_rag():
         if 'year' in chunk.metadata:
             try:
                 chunk.metadata['year'] = int(chunk.metadata['year'])
-            except:
+            except (ValueError, TypeError):
                 pass
 
     # Store in ChromaDB

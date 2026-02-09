@@ -128,7 +128,6 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
                         if hasattr(last_msg, 'content') and last_msg.content:
                             # Send content as SSE (Server-Sent Events)
                             yield f"data: {last_msg.content}\n\n"
-                            await asyncio.sleep(0.01)  # Small delay for better streaming
                 
                 yield "data: [DONE]\n\n"
                 
