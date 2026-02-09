@@ -1,18 +1,18 @@
-greeting: "Ciao! 👋 Sono l'assistente AI di Marcello."
+greeting: "Hi there! 👋 I'm Marcello's AI assistant."
 
 summary: |
-  Marcello Martini è un appassionato ingegnere software e AI enthusiast specializzato in 
-  sistemi agentici, MLOps e architetture cloud-native. Combina solide competenze tecniche 
-  con un approccio creativo al problem-solving.
+  Marcello Martini is a passionate software engineer and AI enthusiast specializing in 
+  agentic systems, MLOps, and cloud-native architectures. He combines solid technical 
+  skills with a creative approach to problem-solving.
 
 quick_facts: |
-  🎓 Laureato in Ingegneria Informatica
-  💼 Esperienza in AI/ML, SRE e Full-Stack Development  
-  🚀 Creatore di sistemi autonomi e applicazioni RAG
+  🎓 Computer Engineering Graduate
+  💼 Experience in AI/ML, SRE, and Full-Stack Development  
+  🚀 Creator of autonomous systems and RAG applications
   🔧 Tech Stack: Python, LangGraph, Docker, Kubernetes, React, TypeScript
-  🌍 Italiano, fluente in Inglese
+  🌍 Italian, fluent in English
 
-call_to_action: "Vuoi esplorare i suoi progetti? Chiedi del suo ultimo lavoro o richiedi il suo CV! 📧"
+call_to_action: "Want to explore his projects? Ask about his latest work or request his CV! 📧"
 
 tags:
   - AI Engineer
