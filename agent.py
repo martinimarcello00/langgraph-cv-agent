@@ -28,24 +28,6 @@ llm_with_tools = llm.bind_tools(tools)
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
-# --- Helpers ---
-def get_safe_history(messages: list[BaseMessage], k: int = 6) -> list[BaseMessage]:
-    """
-    Safely retrieves the last k messages, ensuring that we do not slice in the middle
-    of a tool execution sequence (i.e. starting with a ToolMessage).
-    """
-    if len(messages) <= k:
-        return messages
-    
-    start_idx = len(messages) - k
-    
-    # If the starting message is a ToolMessage, we must include the preceding AIMessage 
-    # (and any other preceding ToolMessages) to maintain a valid conversation structure.
-    while start_idx > 0 and isinstance(messages[start_idx], ToolMessage):
-        start_idx -= 1
-        
-    return messages[start_idx:]
-
 # --- Nodes ---
 
 # --- Prompt Loading (Optimized) ---
@@ -57,10 +39,13 @@ except FileNotFoundError as e:
     raise RuntimeError(f"Critical Error: Prompt file not found: {e}")
 
 # --- Helpers ---
-def get_safe_history(messages: list[BaseMessage], k: int = 6) -> list[BaseMessage]:
+def get_safe_history(messages: list[BaseMessage], k: int = 4) -> list[BaseMessage]:
     """
-    Safely retrieves the last k messages, ensuring that we do not slice in the middle
-    of a tool execution sequence (i.e. starting with a ToolMessage).
+    Safely retrieves the last k messages (reduced to 4 for better performance),
+    ensuring that we do not slice in the middle of a tool execution sequence.
+    
+    k=4 means approximately 2 conversation turns, which is sufficient for
+    most interactions while reducing token usage and improving response time.
     """
     if len(messages) <= k:
         return messages
@@ -84,8 +69,8 @@ def run_agent_reasoning(state: AgentState):
     """
     messages = state["messages"]
     
-    # Context Windowing: Keep last 6 messages (approx 3 turns), ensuring valid tool sequences
-    recent_messages = get_safe_history(messages, k=6)
+    # Context Windowing: Keep last 4 messages (approx 2 turns), ensuring valid tool sequences
+    recent_messages = get_safe_history(messages, k=4)
     
     # Use the tool-bound LLM with the unified agent prompt
     response = llm_with_tools.invoke([SystemMessage(content=AGENT_PROMPT)] + recent_messages)

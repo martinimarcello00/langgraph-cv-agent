@@ -4,6 +4,9 @@ import logging
 from typing import Literal
 from dotenv import load_dotenv
 import requests
+from functools import lru_cache
+from langchain.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
 
 # --- Initialization ---
 load_dotenv()
@@ -17,12 +20,64 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONAL_DATA_DIR = os.path.join(BASE_DIR, "personal_data")
 PROJECTS_DIR = os.path.join(PERSONAL_DATA_DIR, "projects")
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
 MAILGUN_URL = os.getenv("MAILGUN_URL")
 MAILGUN_FROM = os.getenv("MAILGUN_SENDER")
 
 # --- Tools ---
+
+@lru_cache(maxsize=1)
+def get_vectorstore():
+    """
+    Cached vector store initialization to avoid repeated loading.
+    This significantly improves performance for multiple queries.
+    """
+    embeddings = HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL_NAME,
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={
+            'normalize_embeddings': True,
+            'batch_size': 32
+        }
+    )
+    return Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
+
+def get_introduction() -> str:
+    """
+    Returns a brief, engaging introduction about Marcello.
+    This should be called for greetings, general questions, or 'Who is Marcello?' queries.
+    """
+    intro_path = os.path.join(PERSONAL_DATA_DIR, "intro.yaml")
+    
+    try:
+        if not os.path.exists(intro_path):
+            logger.warning("Introduction file not found, using fallback")
+            return """
+👋 Ciao! Sono l'assistente AI di Marcello Martini.
+
+Marcello è un ingegnere software specializzato in AI/ML, sistemi agentici e architetture cloud-native.
+
+🚀 Chiedi dei suoi progetti o richiedi il suo CV!
+"""
+        
+        with open(intro_path, 'r', encoding='utf-8') as f:
+            intro_data = yaml.safe_load(f)
+        
+        response = f"""{intro_data.get('greeting', 'Hi there! 👋')}
+
+{intro_data.get('summary', '')}
+
+**Quick Facts:**
+{intro_data.get('quick_facts', '')}
+
+{intro_data.get('call_to_action', 'Ask me about his projects, skills, or experience!')}
+"""
+        return response.strip()
+        
+    except Exception as e:
+        logger.error(f"Error reading introduction: {e}")
+        return "Marcello is a skilled professional with expertise in AI/ML, software engineering, and system architecture. Ask me about his projects!"
 
 def get_profile_section(section_name: Literal["activities", "awards", "certifications", "education", "experience", "volunteer"]) -> str:
     """
@@ -115,34 +170,82 @@ def get_project_details(project_id: str) -> str:
 
 def search_projects(query: str) -> str:
     """
-    Searches for projects using RAG (Vector Search).
+    Searches for projects using Hybrid RAG (combining Vector Search + BM25).
+    This approach provides better retrieval by combining semantic understanding
+    with exact keyword matching.
     """
     try:
         if not os.path.exists(CHROMA_DB_DIR):
-            return "Error: ChromaDB index not found. Please run 'create_rag.ipynb' to generate the index."
-            
-        # Initialize Embeddings
-        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+            return "Error: ChromaDB index not found. Please run 'python build_rag.py' to generate the index."
         
-        # Load Vector Store
-        vectorstore = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
+        # Use cached vector store
+        vectorstore = get_vectorstore()
         
-        # Perform Search
-        results = vectorstore.similarity_search(query, k=3)
+        # Get all documents for BM25 retriever
+        logger.info(f"Performing hybrid search for: {query}")
+        all_docs_data = vectorstore.get()
+        
+        # Create documents list for BM25
+        from langchain.schema import Document
+        all_docs = []
+        if all_docs_data and 'documents' in all_docs_data and 'metadatas' in all_docs_data:
+            for i, doc_text in enumerate(all_docs_data['documents']):
+                metadata = all_docs_data['metadatas'][i] if i < len(all_docs_data['metadatas']) else {}
+                all_docs.append(Document(page_content=doc_text, metadata=metadata))
+        
+        if not all_docs:
+            logger.warning("No documents found in vector store")
+            return "No documents available for search."
+        
+        # BM25 Retriever (keyword-based)
+        bm25_retriever = BM25Retriever.from_documents(all_docs)
+        bm25_retriever.k = 4
+        
+        # Vector Retriever (semantic-based)
+        vector_retriever = vectorstore.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 4}
+        )
+        
+        # Ensemble Retriever - combines both approaches
+        # Weight: 30% BM25 (keywords), 70% Vector (semantics)
+        ensemble_retriever = EnsembleRetriever(
+            retrievers=[bm25_retriever, vector_retriever],
+            weights=[0.3, 0.7]
+        )
+        
+        # Perform hybrid search
+        results = ensemble_retriever.get_relevant_documents(query)
         
         if not results:
             return f"No projects found matching '{query}'."
-            
+        
+        # Format results (take top 5 unique results)
         formatted_results = []
-        for doc in results:
-            source = doc.metadata.get("source", "Unknown Source")
+        seen_content = set()
+        
+        for i, doc in enumerate(results[:5], 1):
             content = doc.page_content.strip()
-            formatted_results.append(f"Source: {source}\nContent: {content}\n---")
+            # Avoid duplicates
+            if content[:100] in seen_content:
+                continue
+            seen_content.add(content[:100])
             
-        return "\n".join(formatted_results)
+            source = doc.metadata.get("source", "Unknown Source")
+            doc_type = doc.metadata.get("doc_type", "document")
+            
+            formatted_results.append(
+                f"[Result {i}] ({doc_type})\n"
+                f"Source: {source}\n"
+                f"Content: {content}\n"
+                f"---"
+            )
+        
+        logger.info(f"Found {len(formatted_results)} relevant results")
+        return "\n\n".join(formatted_results)
         
     except Exception as e:
-        logger.error(f"Error searching projects: {e}")
+        logger.error(f"Error in hybrid search: {e}", exc_info=True)
         return f"Error searching projects: {str(e)}"
 
 def send_cv_email(email_address: str) -> str:
@@ -178,4 +281,4 @@ def send_cv_email(email_address: str) -> str:
         return f"Error sending email: {str(e)}"
 
 # Export the list of tools for the agent
-tools = [get_profile_section, list_projects, get_project_details, search_projects, send_cv_email]
+tools = [get_introduction, get_profile_section, list_projects, get_project_details, search_projects, send_cv_email]

@@ -1,0 +1,21 @@
+greeting: "Ciao! 👋 Sono l'assistente AI di Marcello."
+
+summary: |
+  Marcello Martini è un appassionato ingegnere software e AI enthusiast specializzato in 
+  sistemi agentici, MLOps e architetture cloud-native. Combina solide competenze tecniche 
+  con un approccio creativo al problem-solving.
+
+quick_facts: |
+  🎓 Laureato in Ingegneria Informatica
+  💼 Esperienza in AI/ML, SRE e Full-Stack Development  
+  🚀 Creatore di sistemi autonomi e applicazioni RAG
+  🔧 Tech Stack: Python, LangGraph, Docker, Kubernetes, React, TypeScript
+  🌍 Italiano, fluente in Inglese
+
+call_to_action: "Vuoi esplorare i suoi progetti? Chiedi del suo ultimo lavoro o richiedi il suo CV! 📧"
+
+tags:
+  - AI Engineer
+  - MLOps Specialist
+  - LangGraph Expert
+  - System Architect

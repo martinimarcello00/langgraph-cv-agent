@@ -19,3 +19,4 @@ langchain_chroma
 tqdm
 gradio
 requests
+rank-bm25

@@ -22,16 +22,22 @@ An autonomous agent designed to answer questions about Marcello Martini's profes
 ## ✨ Features
 
 - **Autonomous Reasoning**: Uses **LangGraph** to plan multi-step actions and execute tool calls efficiently.
-- **RAG & Tool Integration**:
-  - **Portfolio Retrieval**: Searches and retrieves details about specific projects from markdown files.
-  - **Structured Data Access**: Queries structured YAML data for Experience, Education, and Certifications.
-  - **Email Capability**: Can send emails via Mailgun (optional).
-- **Persistent Memory**: Maintains conversation context with a windowed memory (last 6 messages) to support follow-up questions.
+- **Advanced RAG & Retrieval**:
+  - **Hybrid Search**: Combines semantic vector search with BM25 keyword matching for superior retrieval accuracy
+  - **Optimized Embeddings**: Uses BAAI/bge-small-en-v1.5 for better semantic understanding
+  - **Smart Chunking**: Markdown-aware chunking preserves document structure
+  - **Cached Performance**: Vector store caching for faster repeated queries
+- **Intelligent Introduction Management**: Dedicated greeting system for natural first interactions
+- **Portfolio Tools**:
+  - **Portfolio Retrieval**: Searches and retrieves details about specific projects
+  - **Structured Data Access**: Queries structured YAML data for Experience, Education, and Certifications
+  - **Email Capability**: Can send CV via Mailgun
+- **Optimized Memory**: Reduced context window (4 messages) for faster processing
 - **Robustness & Security**:
-  - **Rate Limiting**: Integrated `slowapi` to limit requests (e.g., 5 requests/minute) protecting the API.
-  - **Token Usage Tracking**: Monitors execution to stay within a daily defined token budget.
-- **Interactive UI**: Built-in **Gradio** interface for easy interaction.
-- **API First**: Exposes a FastAPI endpoint for programmatic access.
+  - **Rate Limiting**: Integrated `slowapi` to limit requests (e.g., 5 requests/minute)
+  - **Token Usage Tracking**: Monitors execution to stay within daily budget
+- **Interactive UI**: Built-in **Gradio** interface for easy interaction
+- **API First**: FastAPI endpoints with optional streaming support
 
 ## 🚀 Setup locally
 
