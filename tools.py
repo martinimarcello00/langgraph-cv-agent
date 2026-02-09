@@ -114,24 +114,34 @@ def search_projects_by_tech(technology: str) -> str:
         search_term = technology.lower().strip()
         
         # Find exact or partial matches
+        seen_project_ids = set()
         matching_projects = []
         
         # First try exact match
         if search_term in tech_index:
-            matching_projects = tech_index[search_term]
+            for project in tech_index[search_term]:
+                if project['id'] not in seen_project_ids:
+                    matching_projects.append(project)
+                    seen_project_ids.add(project['id'])
         else:
             # Try partial match
             for tech_key, projects in tech_index.items():
                 if search_term in tech_key or tech_key in search_term:
                     for project in projects:
-                        if project not in matching_projects:
+                        if project['id'] not in seen_project_ids:
                             matching_projects.append(project)
+                            seen_project_ids.add(project['id'])
         
         if not matching_projects:
             # Provide helpful suggestions
             available_techs = sorted(set(tech_index.keys()))
-            suggestions = [t for t in available_techs if search_term[:3] in t][:5]
-            suggestion_text = f"\n\nSuggested technologies: {', '.join(suggestions)}" if suggestions else ""
+            # Only suggest if search term is at least 2 chars
+            if len(search_term) >= 2:
+                prefix = search_term[:min(3, len(search_term))]
+                suggestions = [t for t in available_techs if prefix in t][:5]
+                suggestion_text = f"\n\nSuggested technologies: {', '.join(suggestions)}" if suggestions else ""
+            else:
+                suggestion_text = ""
             return f"No projects found using '{technology}'.{suggestion_text}"
         
         # Format results
