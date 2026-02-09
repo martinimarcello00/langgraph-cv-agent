@@ -4,6 +4,9 @@ import logging
 from typing import Literal
 from dotenv import load_dotenv
 import requests
+from functools import lru_cache
+from langchain_community.retrievers import BM25Retriever
+from langchain_core.documents import Document
 
 # --- Initialization ---
 load_dotenv()
@@ -17,12 +20,183 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONAL_DATA_DIR = os.path.join(BASE_DIR, "personal_data")
 PROJECTS_DIR = os.path.join(PERSONAL_DATA_DIR, "projects")
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
 MAILGUN_URL = os.getenv("MAILGUN_URL")
 MAILGUN_FROM = os.getenv("MAILGUN_SENDER")
 
 # --- Tools ---
+
+@lru_cache(maxsize=1)
+def get_vectorstore():
+    """
+    Cached vector store initialization to avoid repeated loading.
+    This significantly improves performance for multiple queries.
+    """
+    embeddings = HuggingFaceEmbeddings(
+        model_name=EMBEDDING_MODEL_NAME,
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={
+            'normalize_embeddings': True,
+            'batch_size': 32
+        }
+    )
+    return Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
+
+@lru_cache(maxsize=1)
+def _build_tech_stack_index():
+    """
+    Builds a cached index mapping technologies to projects.
+    Returns a dict where keys are technology names (lowercase) and values are lists of project info.
+    """
+    tech_index = {}
+    
+    if not os.path.exists(PROJECTS_DIR):
+        return tech_index
+    
+    for filename in os.listdir(PROJECTS_DIR):
+        if not filename.endswith(".md"):
+            continue
+            
+        project_id = filename.replace(".md", "")
+        file_path = os.path.join(PROJECTS_DIR, filename)
+        
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            # Extract frontmatter
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    frontmatter = yaml.safe_load(parts[1])
+                    title = frontmatter.get("title", project_id)
+                    description = frontmatter.get("description", "")
+                    technologies = frontmatter.get("technologies", [])
+                    year = frontmatter.get("year", "")
+                    
+                    project_info = {
+                        "id": project_id,
+                        "title": title,
+                        "description": description,
+                        "year": year,
+                        "technologies": technologies
+                    }
+                    
+                    # Index by each technology (case-insensitive)
+                    for tech in technologies:
+                        tech_lower = tech.lower()
+                        if tech_lower not in tech_index:
+                            tech_index[tech_lower] = []
+                        tech_index[tech_lower].append(project_info)
+                        
+        except Exception as e:
+            logger.warning(f"Failed to index project {filename}: {e}")
+    
+    return tech_index
+
+def search_projects_by_tech(technology: str) -> str:
+    """
+    Searches for projects that use a specific technology or tech stack.
+    
+    Examples:
+    - "LangGraph" -> returns all projects using LangGraph
+    - "Python" -> returns all Python projects
+    - "Kubernetes" -> returns all K8s projects
+    """
+    try:
+        tech_index = _build_tech_stack_index()
+        
+        if not tech_index:
+            return "No projects found or unable to index projects."
+        
+        # Normalize search term
+        search_term = technology.lower().strip()
+        
+        # Find exact or partial matches
+        seen_project_ids = set()
+        matching_projects = []
+        
+        # First try exact match
+        if search_term in tech_index:
+            for project in tech_index[search_term]:
+                if project['id'] not in seen_project_ids:
+                    matching_projects.append(project)
+                    seen_project_ids.add(project['id'])
+        else:
+            # Try partial match
+            for tech_key, projects in tech_index.items():
+                if search_term in tech_key or tech_key in search_term:
+                    for project in projects:
+                        if project['id'] not in seen_project_ids:
+                            matching_projects.append(project)
+                            seen_project_ids.add(project['id'])
+        
+        if not matching_projects:
+            # Provide helpful suggestions
+            available_techs = sorted(set(tech_index.keys()))
+            # Only suggest if search term is at least 2 chars
+            if len(search_term) >= 2:
+                prefix = search_term[:min(3, len(search_term))]
+                suggestions = [t for t in available_techs if prefix in t][:5]
+                suggestion_text = f"\n\nSuggested technologies: {', '.join(suggestions)}" if suggestions else ""
+            else:
+                suggestion_text = ""
+            return f"No projects found using '{technology}'.{suggestion_text}"
+        
+        # Format results
+        result_lines = [f"Found {len(matching_projects)} project(s) using **{technology}**:\n"]
+        
+        for project in matching_projects:
+            tech_list = ", ".join(project["technologies"])
+            result_lines.append(
+                f"**{project['title']}** ({project['year']})\n"
+                f"- ID: `{project['id']}`\n"
+                f"- Description: {project['description']}\n"
+                f"- Tech Stack: {tech_list}\n"
+            )
+        
+        return "\n".join(result_lines)
+        
+    except Exception as e:
+        logger.error(f"Error searching projects by tech: {e}", exc_info=True)
+        return f"Error searching by technology: {str(e)}"
+
+def get_introduction() -> str:
+    """
+    Returns a brief, engaging introduction about Marcello.
+    This should be called for greetings, general questions, or 'Who is Marcello?' queries.
+    """
+    intro_path = os.path.join(PERSONAL_DATA_DIR, "intro.yaml")
+    
+    try:
+        if not os.path.exists(intro_path):
+            logger.warning("Introduction file not found, using fallback")
+            return """
+👋 Ciao! Sono l'assistente AI di Marcello Martini.
+
+Marcello è un ingegnere software specializzato in AI/ML, sistemi agentici e architetture cloud-native.
+
+🚀 Chiedi dei suoi progetti o richiedi il suo CV!
+"""
+        
+        with open(intro_path, 'r', encoding='utf-8') as f:
+            intro_data = yaml.safe_load(f)
+        
+        response = f"""{intro_data.get('greeting', 'Hi there! 👋')}
+
+{intro_data.get('summary', '')}
+
+**Quick Facts:**
+{intro_data.get('quick_facts', '')}
+
+{intro_data.get('call_to_action', 'Ask me about his projects, skills, or experience!')}
+"""
+        return response.strip()
+        
+    except Exception as e:
+        logger.error(f"Error reading introduction: {e}")
+        return "Marcello is a skilled professional with expertise in AI/ML, software engineering, and system architecture. Ask me about his projects!"
 
 def get_profile_section(section_name: Literal["activities", "awards", "certifications", "education", "experience", "volunteer"]) -> str:
     """
@@ -115,34 +289,91 @@ def get_project_details(project_id: str) -> str:
 
 def search_projects(query: str) -> str:
     """
-    Searches for projects using RAG (Vector Search).
+    Searches for projects using Hybrid RAG (combining Vector Search + BM25).
+    This approach provides better retrieval by combining semantic understanding
+    with exact keyword matching.
     """
     try:
         if not os.path.exists(CHROMA_DB_DIR):
-            return "Error: ChromaDB index not found. Please run 'create_rag.ipynb' to generate the index."
-            
-        # Initialize Embeddings
-        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+            return "Error: ChromaDB index not found. Please run 'python build_rag.py' to generate the index."
         
-        # Load Vector Store
-        vectorstore = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
+        # Use cached vector store
+        vectorstore = get_vectorstore()
         
-        # Perform Search
-        results = vectorstore.similarity_search(query, k=3)
+        # Get all documents for BM25 retriever
+        logger.info(f"Performing hybrid search for: {query}")
+        all_docs_data = vectorstore.get()
         
-        if not results:
+        # Create documents list for BM25
+        all_docs = []
+        if all_docs_data and 'documents' in all_docs_data and 'metadatas' in all_docs_data:
+            for i, doc_text in enumerate(all_docs_data['documents']):
+                metadata = all_docs_data['metadatas'][i] if i < len(all_docs_data['metadatas']) else {}
+                all_docs.append(Document(page_content=doc_text, metadata=metadata))
+        
+        if not all_docs:
+            logger.warning("No documents found in vector store")
+            return "No documents available for search."
+        
+        # BM25 Retriever (keyword-based)
+        bm25_retriever = BM25Retriever.from_documents(all_docs)
+        bm25_retriever.k = 4
+        
+        # Vector Retriever (semantic-based)
+        vector_retriever = vectorstore.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 4}
+        )
+        
+        # Perform both searches and combine results
+        # Get BM25 results (keyword matching)
+        bm25_results = bm25_retriever.get_relevant_documents(query)
+        
+        # Get vector results (semantic matching)
+        vector_results = vector_retriever.get_relevant_documents(query)
+        
+        # Combine and deduplicate results
+        # Weight: 60% Vector (semantic), 40% BM25 (keywords) - taking top 3 and 2 respectively
+        combined_results = []
+        seen_content = set()
+        
+        # Add vector results first (higher weight - 60%)
+        for doc in vector_results[:3]:  # Take top 3 from vector
+            content_key = doc.page_content.strip()[:100]
+            if content_key not in seen_content:
+                combined_results.append(doc)
+                seen_content.add(content_key)
+        
+        # Add BM25 results to fill gaps (40%)
+        for doc in bm25_results[:2]:  # Take top 2 from BM25
+            content_key = doc.page_content.strip()[:100]
+            if content_key not in seen_content:
+                combined_results.append(doc)
+                seen_content.add(content_key)
+        
+        if not combined_results:
             return f"No projects found matching '{query}'."
-            
+        
+        # Format results (take top 5 unique results)
         formatted_results = []
-        for doc in results:
-            source = doc.metadata.get("source", "Unknown Source")
+        
+        for i, doc in enumerate(combined_results[:5], 1):
             content = doc.page_content.strip()
-            formatted_results.append(f"Source: {source}\nContent: {content}\n---")
+            source = doc.metadata.get("source", "Unknown Source")
+            doc_type = doc.metadata.get("doc_type", "document")
             
-        return "\n".join(formatted_results)
+            formatted_results.append(
+                f"[Result {i}] ({doc_type})\n"
+                f"Source: {source}\n"
+                f"Content: {content}\n"
+                f"---"
+            )
+        
+        logger.info(f"Found {len(formatted_results)} relevant results")
+        return "\n\n".join(formatted_results)
         
     except Exception as e:
-        logger.error(f"Error searching projects: {e}")
+        logger.error(f"Error in hybrid search: {e}", exc_info=True)
         return f"Error searching projects: {str(e)}"
 
 def send_cv_email(email_address: str) -> str:
@@ -178,4 +409,4 @@ def send_cv_email(email_address: str) -> str:
         return f"Error sending email: {str(e)}"
 
 # Export the list of tools for the agent
-tools = [get_profile_section, list_projects, get_project_details, search_projects, send_cv_email]
+tools = [get_introduction, get_profile_section, search_projects_by_tech, list_projects, get_project_details, search_projects, send_cv_email]
