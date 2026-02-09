@@ -5,7 +5,6 @@ from typing import Literal
 from dotenv import load_dotenv
 import requests
 from functools import lru_cache
-from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 
 # --- Initialization ---
@@ -207,30 +206,40 @@ def search_projects(query: str) -> str:
             search_kwargs={"k": 4}
         )
         
-        # Ensemble Retriever - combines both approaches
-        # Weight: 30% BM25 (keywords), 70% Vector (semantics)
-        ensemble_retriever = EnsembleRetriever(
-            retrievers=[bm25_retriever, vector_retriever],
-            weights=[0.3, 0.7]
-        )
+        # Perform both searches and combine results
+        # Get BM25 results (keyword matching)
+        bm25_results = bm25_retriever.get_relevant_documents(query)
         
-        # Perform hybrid search
-        results = ensemble_retriever.get_relevant_documents(query)
+        # Get vector results (semantic matching)
+        vector_results = vector_retriever.get_relevant_documents(query)
         
-        if not results:
+        # Combine and deduplicate results
+        # Weight: 30% BM25, 70% Vector (by taking more from vector)
+        combined_results = []
+        seen_content = set()
+        
+        # Add vector results first (higher weight)
+        for doc in vector_results[:3]:  # Take top 3 from vector
+            content_key = doc.page_content.strip()[:100]
+            if content_key not in seen_content:
+                combined_results.append(doc)
+                seen_content.add(content_key)
+        
+        # Add BM25 results to fill gaps
+        for doc in bm25_results[:2]:  # Take top 2 from BM25
+            content_key = doc.page_content.strip()[:100]
+            if content_key not in seen_content:
+                combined_results.append(doc)
+                seen_content.add(content_key)
+        
+        if not combined_results:
             return f"No projects found matching '{query}'."
         
         # Format results (take top 5 unique results)
         formatted_results = []
-        seen_content = set()
         
-        for i, doc in enumerate(results[:5], 1):
+        for i, doc in enumerate(combined_results[:5], 1):
             content = doc.page_content.strip()
-            # Avoid duplicates
-            if content[:100] in seen_content:
-                continue
-            seen_content.add(content[:100])
-            
             source = doc.metadata.get("source", "Unknown Source")
             doc_type = doc.metadata.get("doc_type", "document")
             
