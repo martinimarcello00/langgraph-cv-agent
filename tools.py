@@ -43,6 +43,115 @@ def get_vectorstore():
     )
     return Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
 
+@lru_cache(maxsize=1)
+def _build_tech_stack_index():
+    """
+    Builds a cached index mapping technologies to projects.
+    Returns a dict where keys are technology names (lowercase) and values are lists of project info.
+    """
+    tech_index = {}
+    
+    if not os.path.exists(PROJECTS_DIR):
+        return tech_index
+    
+    for filename in os.listdir(PROJECTS_DIR):
+        if not filename.endswith(".md"):
+            continue
+            
+        project_id = filename.replace(".md", "")
+        file_path = os.path.join(PROJECTS_DIR, filename)
+        
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            # Extract frontmatter
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    frontmatter = yaml.safe_load(parts[1])
+                    title = frontmatter.get("title", project_id)
+                    description = frontmatter.get("description", "")
+                    technologies = frontmatter.get("technologies", [])
+                    year = frontmatter.get("year", "")
+                    
+                    project_info = {
+                        "id": project_id,
+                        "title": title,
+                        "description": description,
+                        "year": year,
+                        "technologies": technologies
+                    }
+                    
+                    # Index by each technology (case-insensitive)
+                    for tech in technologies:
+                        tech_lower = tech.lower()
+                        if tech_lower not in tech_index:
+                            tech_index[tech_lower] = []
+                        tech_index[tech_lower].append(project_info)
+                        
+        except Exception as e:
+            logger.warning(f"Failed to index project {filename}: {e}")
+    
+    return tech_index
+
+def search_projects_by_tech(technology: str) -> str:
+    """
+    Searches for projects that use a specific technology or tech stack.
+    
+    Examples:
+    - "LangGraph" -> returns all projects using LangGraph
+    - "Python" -> returns all Python projects
+    - "Kubernetes" -> returns all K8s projects
+    """
+    try:
+        tech_index = _build_tech_stack_index()
+        
+        if not tech_index:
+            return "No projects found or unable to index projects."
+        
+        # Normalize search term
+        search_term = technology.lower().strip()
+        
+        # Find exact or partial matches
+        matching_projects = []
+        
+        # First try exact match
+        if search_term in tech_index:
+            matching_projects = tech_index[search_term]
+        else:
+            # Try partial match
+            for tech_key, projects in tech_index.items():
+                if search_term in tech_key or tech_key in search_term:
+                    for project in projects:
+                        if project not in matching_projects:
+                            matching_projects.append(project)
+        
+        if not matching_projects:
+            # Provide helpful suggestions
+            available_techs = sorted(set(tech_index.keys()))
+            suggestions = [t for t in available_techs if search_term[:3] in t][:5]
+            suggestion_text = f"\n\nSuggested technologies: {', '.join(suggestions)}" if suggestions else ""
+            return f"No projects found using '{technology}'.{suggestion_text}"
+        
+        # Format results
+        result_lines = [f"Found {len(matching_projects)} project(s) using **{technology}**:\n"]
+        
+        for project in matching_projects:
+            tech_list = ", ".join(project["technologies"])
+            result_lines.append(
+                f"**{project['title']}** ({project['year']})\n"
+                f"- ID: `{project['id']}`\n"
+                f"- Description: {project['description']}\n"
+                f"- Tech Stack: {tech_list}\n"
+            )
+        
+        return "\n".join(result_lines)
+        
+    except Exception as e:
+        logger.error(f"Error searching projects by tech: {e}", exc_info=True)
+        return f"Error searching by technology: {str(e)}"
+
 def get_introduction() -> str:
     """
     Returns a brief, engaging introduction about Marcello.
@@ -290,4 +399,4 @@ def send_cv_email(email_address: str) -> str:
         return f"Error sending email: {str(e)}"
 
 # Export the list of tools for the agent
-tools = [get_introduction, get_profile_section, list_projects, get_project_details, search_projects, send_cv_email]
+tools = [get_introduction, get_profile_section, search_projects_by_tech, list_projects, get_project_details, search_projects, send_cv_email]

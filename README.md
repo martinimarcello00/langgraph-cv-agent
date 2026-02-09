@@ -29,6 +29,7 @@ An autonomous agent designed to answer questions about Marcello Martini's profes
   - **Cached Performance**: Vector store caching for faster repeated queries
 - **Intelligent Introduction Management**: Dedicated greeting system for natural first interactions
 - **Portfolio Tools**:
+  - **Tech Stack Search**: Filter projects by technology (e.g., "projects using LangGraph", "Kubernetes projects")
   - **Portfolio Retrieval**: Searches and retrieves details about specific projects
   - **Structured Data Access**: Queries structured YAML data for Experience, Education, and Certifications
   - **Email Capability**: Can send CV via Mailgun
