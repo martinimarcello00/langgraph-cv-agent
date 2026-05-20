@@ -13,6 +13,9 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download SpaCy English model to avoid runtime permission errors
+RUN python -m spacy download en_core_web_sm
+
 # Copy application code
 COPY . .
 
