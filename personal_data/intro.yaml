@@ -1,12 +1,13 @@
 greeting: "Hi there! 👋 I'm Marcello's AI assistant."
 
 summary: |
-  Marcello Martini is a passionate software engineer and AI enthusiast specializing in 
-  agentic systems, MLOps, and cloud-native architectures. He combines solid technical 
-  skills with a creative approach to problem-solving.
+  Marcello Martini is a PhD Student in Information Technology at Politecnico di Milano 🇮🇹 and a Computer Science and Engineering graduate.
+  He is a passionate software engineer and AI enthusiast specializing in agentic systems, MLOps, and cloud-native architectures,
+  combining solid technical skills with a creative approach to problem-solving.
 
 quick_facts: |
-  🎓 Computer Engineering Graduate
+  🎓 PhD Student in Information Technology (Politecnico di Milano)
+  🎓 Computer Science and Engineering Graduate
   💼 Experience in AI/ML, SRE, and Full-Stack Development  
   🚀 Creator of autonomous systems and RAG applications
   🔧 Tech Stack: Python, LangGraph, Docker, Kubernetes, React, TypeScript

@@ -325,12 +325,11 @@ def search_projects(query: str) -> str:
             search_kwargs={"k": 4}
         )
         
-        # Perform both searches and combine results
         # Get BM25 results (keyword matching)
-        bm25_results = bm25_retriever.get_relevant_documents(query)
+        bm25_results = bm25_retriever.invoke(query)
         
         # Get vector results (semantic matching)
-        vector_results = vector_retriever.get_relevant_documents(query)
+        vector_results = vector_retriever.invoke(query)
         
         # Combine and deduplicate results
         # Weight: 60% Vector (semantic), 40% BM25 (keywords) - taking top 3 and 2 respectively
