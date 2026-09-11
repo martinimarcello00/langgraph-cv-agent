@@ -1,0 +1,76 @@
+name: Refresh corpus from the website
+
+on:
+  # The website can trigger this on deploy; needs a PAT with contents:write on
+  # this repo, stored there as a secret.
+  repository_dispatch:
+    types: [content-updated]
+  # Safety net, so content is never more than a day stale even without the hook.
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-corpus
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Fetch the published corpus
+        run: |
+          curl -sSf --retry 3 --retry-delay 5 --max-time 60 \
+            https://marcellomartini.tech/agent-corpus.json -o /tmp/corpus.json
+          echo "fetched $(wc -c < /tmp/corpus.json) bytes"
+
+      - name: Stop early if the content has not changed
+        id: diff
+        run: |
+          OLD=$(python -c "import json;print(json.load(open('corpus/corpus.json'))['meta']['contentHash'])")
+          NEW=$(python -c "import json;print(json.load(open('/tmp/corpus.json'))['meta']['contentHash'])")
+          echo "old=$OLD"
+          echo "new=$NEW"
+          echo "hash=$NEW" >> "$GITHUB_OUTPUT"
+          if [ "$OLD" = "$NEW" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.diff.outputs.changed == 'true'
+        run: pip install -r requirements.txt
+
+      # The gate: a malformed corpus fails here rather than becoming an image
+      # full of empty documents.
+      - name: Validate, index and smoke test
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          cp /tmp/corpus.json corpus/corpus.json
+          python build_index.py
+          python verify_corpus.py
+        env:
+          OPENAI_API_KEY: sk-not-used-by-these-checks
+
+      - name: Commit the new corpus
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Restricted to corpus/ on purpose: this job syncs content, never code.
+          git add corpus/corpus.json corpus/catalog.txt
+          git commit -m "chore: refresh corpus from the website
+
+          contentHash ${{ steps.diff.outputs.hash }}"
+          git push

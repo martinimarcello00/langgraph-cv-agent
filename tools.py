@@ -1,371 +1,177 @@
-import os
-import yaml
+import json
 import logging
-from typing import Literal
-from dotenv import load_dotenv
-import requests
+import os
 from functools import lru_cache
+from typing import Literal, Optional
+
+import requests
+from dotenv import load_dotenv
+from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
+
+from corpus_schema import Corpus
+from embeddings import get_embeddings
 
 # --- Initialization ---
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-from langchain_chroma import Chroma
-
-from embeddings import get_embeddings
-
 # --- Configuration ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PERSONAL_DATA_DIR = os.path.join(BASE_DIR, "personal_data")
-PROJECTS_DIR = os.path.join(PERSONAL_DATA_DIR, "projects")
+CORPUS_PATH = os.path.join(BASE_DIR, "corpus", "corpus.json")
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
+SITE_URL = os.getenv("SITE_URL", "https://marcellomartini.tech")
+
 MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
 MAILGUN_URL = os.getenv("MAILGUN_URL")
 MAILGUN_FROM = os.getenv("MAILGUN_SENDER")
 
-# --- Tools ---
+CvSection = Literal[
+    "experience", "education", "awards", "certifications", "volunteer", "activities"
+]
+
+
+# --- Corpus access ---
 
 @lru_cache(maxsize=1)
-def get_vectorstore():
-    """
-    Cached vector store initialization to avoid repeated loading.
-    This significantly improves performance for multiple queries.
-    """
+def get_corpus() -> Corpus:
+    with open(CORPUS_PATH, "r", encoding="utf-8") as handle:
+        return Corpus.model_validate(json.load(handle))
+
+
+@lru_cache(maxsize=1)
+def get_vectorstore() -> Chroma:
     return Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=get_embeddings())
 
+
 @lru_cache(maxsize=1)
-def _build_tech_stack_index():
-    """
-    Builds a cached index mapping technologies to projects.
-    Returns a dict where keys are technology names (lowercase) and values are lists of project info.
-    """
-    tech_index = {}
-    
-    if not os.path.exists(PROJECTS_DIR):
-        return tech_index
-    
-    for filename in os.listdir(PROJECTS_DIR):
-        if not filename.endswith(".md"):
-            continue
-            
-        project_id = filename.replace(".md", "")
-        file_path = os.path.join(PROJECTS_DIR, filename)
-        
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            
-            # Extract frontmatter
-            if content.startswith("---"):
-                parts = content.split("---", 2)
-                if len(parts) >= 3:
-                    frontmatter = yaml.safe_load(parts[1])
-                    title = frontmatter.get("title", project_id)
-                    description = frontmatter.get("description", "")
-                    technologies = frontmatter.get("technologies", [])
-                    year = frontmatter.get("year", "")
-                    
-                    project_info = {
-                        "id": project_id,
-                        "title": title,
-                        "description": description,
-                        "year": year,
-                        "technologies": technologies
-                    }
-                    
-                    # Index by each technology (case-insensitive)
-                    for tech in technologies:
-                        tech_lower = tech.lower()
-                        if tech_lower not in tech_index:
-                            tech_index[tech_lower] = []
-                        tech_index[tech_lower].append(project_info)
-                        
-        except Exception as e:
-            logger.warning(f"Failed to index project {filename}: {e}")
-    
-    return tech_index
+def get_bm25() -> Optional[BM25Retriever]:
+    """Built once. It used to be rebuilt from the whole collection on every search."""
+    raw = get_vectorstore().get(include=["documents", "metadatas"])
+    documents = [
+        Document(page_content=text, metadata=(raw["metadatas"][i] or {}))
+        for i, text in enumerate(raw.get("documents") or [])
+    ]
+    if not documents:
+        logger.warning("Vector store is empty, keyword search disabled.")
+        return None
+    retriever = BM25Retriever.from_documents(documents)
+    retriever.k = 6
+    return retriever
 
-def search_projects_by_tech(technology: str) -> str:
-    """
-    Searches for projects that use a specific technology or tech stack.
-    
-    Examples:
-    - "LangGraph" -> returns all projects using LangGraph
-    - "Python" -> returns all Python projects
-    - "Kubernetes" -> returns all K8s projects
+
+def _format_hit(index: int, doc: Document) -> str:
+    meta = doc.metadata
+    header = f"[{index}] {meta.get('title', 'Untitled')} ({meta.get('kind', 'content')})"
+    location = f"id: {meta.get('slug', '')} | url: {SITE_URL}{meta.get('url', '')}"
+    return f"{header}\n{location}\n{doc.page_content.strip()}\n---"
+
+
+# --- Tools ---
+
+def search_content(query: str, kind: str = "") -> str:
+    """Searches everything on Marcello's website: blog posts, projects, pages, the
+    tools he uses, publications and CV entries.
+
+    Use this when you do not already know which item answers the question. If the
+    catalogue in your instructions already names the right item, call get_content
+    instead, which is exact and faster.
+
+    Args:
+        query: what to look for, in natural language.
+        kind: optional filter, one of post, project, page, tool, publication, cv.
     """
     try:
-        tech_index = _build_tech_stack_index()
-        
-        if not tech_index:
-            return "No projects found or unable to index projects."
-        
-        # Normalize search term
-        search_term = technology.lower().strip()
-        
-        # Find exact or partial matches
-        seen_project_ids = set()
-        matching_projects = []
-        
-        # First try exact match
-        if search_term in tech_index:
-            for project in tech_index[search_term]:
-                if project['id'] not in seen_project_ids:
-                    matching_projects.append(project)
-                    seen_project_ids.add(project['id'])
-        else:
-            # Try partial match
-            for tech_key, projects in tech_index.items():
-                if search_term in tech_key or tech_key in search_term:
-                    for project in projects:
-                        if project['id'] not in seen_project_ids:
-                            matching_projects.append(project)
-                            seen_project_ids.add(project['id'])
-        
-        if not matching_projects:
-            # Provide helpful suggestions
-            available_techs = sorted(set(tech_index.keys()))
-            # Only suggest if search term is at least 2 chars
-            if len(search_term) >= 2:
-                prefix = search_term[:min(3, len(search_term))]
-                suggestions = [t for t in available_techs if prefix in t][:5]
-                suggestion_text = f"\n\nSuggested technologies: {', '.join(suggestions)}" if suggestions else ""
-            else:
-                suggestion_text = ""
-            return f"No projects found using '{technology}'.{suggestion_text}"
-        
-        # Format results
-        result_lines = [f"Found {len(matching_projects)} project(s) using **{technology}**:\n"]
-        
-        for project in matching_projects:
-            tech_list = ", ".join(project["technologies"])
-            result_lines.append(
-                f"**{project['title']}** ({project['year']})\n"
-                f"- ID: `{project['id']}`\n"
-                f"- Description: {project['description']}\n"
-                f"- Tech Stack: {tech_list}\n"
-            )
-        
-        return "\n".join(result_lines)
-        
-    except Exception as e:
-        logger.error(f"Error searching projects by tech: {e}", exc_info=True)
-        return f"Error searching by technology: {str(e)}"
+        vector_hits = get_vectorstore().similarity_search(query, k=6)
+        bm25 = get_bm25()
+        keyword_hits = bm25.invoke(query) if bm25 else []
 
-def get_introduction() -> str:
-    """
-    Returns a brief, engaging introduction about Marcello.
-    This should be called for greetings, general questions, or 'Who is Marcello?' queries.
-    """
-    intro_path = os.path.join(PERSONAL_DATA_DIR, "intro.yaml")
-    
-    try:
-        if not os.path.exists(intro_path):
-            logger.warning("Introduction file not found, using fallback")
-            return """
-👋 Ciao! Sono l'assistente AI di Marcello Martini.
+        # Semantic first, keyword results fill the gaps.
+        merged: list[Document] = []
+        seen: set[str] = set()
+        for doc in [*vector_hits, *keyword_hits]:
+            if kind and doc.metadata.get("kind") != kind:
+                continue
+            key = f"{doc.metadata.get('doc_id')}|{doc.page_content[:80]}"
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(doc)
 
-Marcello è un ingegnere software specializzato in AI/ML, sistemi agentici e architetture cloud-native.
+        if not merged:
+            suffix = f" (filtered to kind={kind})" if kind else ""
+            return f"Nothing found for '{query}'.{suffix}"
 
-🚀 Chiedi dei suoi progetti o richiedi il suo CV!
-"""
-        
-        with open(intro_path, 'r', encoding='utf-8') as f:
-            intro_data = yaml.safe_load(f)
-        
-        response = f"""{intro_data.get('greeting', 'Hi there! 👋')}
+        return "\n\n".join(_format_hit(i, doc) for i, doc in enumerate(merged[:5], 1))
+    except Exception as exc:
+        logger.error("search_content failed: %s", exc, exc_info=True)
+        return "Search is unavailable right now."
 
-{intro_data.get('summary', '')}
 
-**Quick Facts:**
-{intro_data.get('quick_facts', '')}
+def get_content(item_id: str) -> str:
+    """Returns one item from the website in full: a project, blog post, page, tool,
+    publication or CV entry.
 
-{intro_data.get('call_to_action', 'Ask me about his projects, skills, or experience!')}
-"""
-        return response.strip()
-        
-    except Exception as e:
-        logger.error(f"Error reading introduction: {e}")
-        return "Marcello is a skilled professional with expertise in AI/ML, software engineering, and system architecture. Ask me about his projects!"
-
-def get_profile_section(section_name: Literal["activities", "awards", "certifications", "education", "experience", "volunteer"]) -> str:
-    """
-    Retrieves a specific section of the user's profile data (YAML).
+    Accepts the id shown in the catalogue (for example "sre-agent"), a full id
+    ("projects/sre-agent"), or a site URL.
     """
     try:
-        file_path = os.path.join(PERSONAL_DATA_DIR, f"{section_name}.yml")
-        
-        if not os.path.exists(file_path):
-            logger.warning(f"Profile section not found: {section_name}")
-            return f"Error: Section '{section_name}' not found."
-        
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-            
-        return yaml.dump(data, sort_keys=False)
-        
-    except Exception as e:
-        logger.error(f"Error reading profile section {section_name}: {e}")
-        return f"Error retrieving section {section_name}: {str(e)}"
+        needle = item_id.strip().strip("/").lower()
+        documents = get_corpus().documents
 
-def list_projects() -> str:
-    """
-    Returns a list of available projects with their descriptions.
-    """
-    try:
-        if not os.path.exists(PROJECTS_DIR):   
-            logger.warning("Projects directory missing.")
-            return "No projects directory found."
-        
-        project_list = []
-        
-        # Iterate over markdown files in the projects directory
-        for filename in sorted(os.listdir(PROJECTS_DIR)):
-            if filename.endswith(".md"):
-                project_id = filename.replace(".md", "")
-                file_path = os.path.join(PROJECTS_DIR, filename)
-                
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        
-                    # Extract frontmatter (simple split)
-                    if content.startswith("---"):
-                        parts = content.split("---", 2)
-                        if len(parts) >= 3:
-                            frontmatter = yaml.safe_load(parts[1])
-                            title = frontmatter.get("title", project_id)
-                            description = frontmatter.get("description", "No description available.")
-                            project_list.append(f"- {project_id}: **{title}** - {description}")
-                        else:
-                            project_list.append(f"- {project_id}: (No metadata)")
-                    else:
-                        project_list.append(f"- {project_id}")
-                        
-                except Exception as e:
-                    logger.warning(f"Failed to read project {filename}: {e}")
-                    project_list.append(f"- {project_id} (Error reading file)")
-
-        if not project_list:
-            return "No projects available."
-        
-        return "\n".join(project_list)
-        
-    except Exception as e:
-        logger.error(f"Error listing projects: {e}")
-        return f"Error listing projects: {str(e)}"
-
-def get_project_details(project_id: str) -> str:
-    """
-    Retrieves the full details of a specific project by its ID.
-    """
-    try:
-        # Security: Prevent directory traversal
-        if ".." in project_id or "/" in project_id or "\\" in project_id:
-            logger.warning(f"Invalid project ID attempt: {project_id}")
-            return "Error: Invalid project ID."
-            
-        file_path = os.path.join(PROJECTS_DIR, f"{project_id}.md")
-        
-        if not os.path.exists(file_path):
-            return f"Error: Project '{project_id}' not found. Use list_projects() to see available IDs."
-        
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
-            
-    except Exception as e:
-        logger.error(f"Error retrieving project {project_id}: {e}")
-        return f"Error retrieving project {project_id}: {str(e)}"
-
-def search_projects(query: str) -> str:
-    """
-    Searches for projects using Hybrid RAG (combining Vector Search + BM25).
-    This approach provides better retrieval by combining semantic understanding
-    with exact keyword matching.
-    """
-    try:
-        if not os.path.exists(CHROMA_DB_DIR):
-            return "Error: ChromaDB index not found. Please run 'python build_rag.py' to generate the index."
-        
-        # Use cached vector store
-        vectorstore = get_vectorstore()
-        
-        # Get all documents for BM25 retriever
-        logger.info(f"Performing hybrid search for: {query}")
-        all_docs_data = vectorstore.get()
-        
-        # Create documents list for BM25
-        all_docs = []
-        if all_docs_data and 'documents' in all_docs_data and 'metadatas' in all_docs_data:
-            for i, doc_text in enumerate(all_docs_data['documents']):
-                metadata = all_docs_data['metadatas'][i] if i < len(all_docs_data['metadatas']) else {}
-                all_docs.append(Document(page_content=doc_text, metadata=metadata))
-        
-        if not all_docs:
-            logger.warning("No documents found in vector store")
-            return "No documents available for search."
-        
-        # BM25 Retriever (keyword-based)
-        bm25_retriever = BM25Retriever.from_documents(all_docs)
-        bm25_retriever.k = 4
-        
-        # Vector Retriever (semantic-based)
-        vector_retriever = vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 4}
+        match = next(
+            (
+                d
+                for d in documents
+                if needle in (d.id.lower(), d.id.split("/", 1)[-1].lower())
+                or d.url.strip("/").lower() == needle
+            ),
+            None,
         )
-        
-        # Get BM25 results (keyword matching)
-        bm25_results = bm25_retriever.invoke(query)
-        
-        # Get vector results (semantic matching)
-        vector_results = vector_retriever.invoke(query)
-        
-        # Combine and deduplicate results
-        # Weight: 60% Vector (semantic), 40% BM25 (keywords) - taking top 3 and 2 respectively
-        combined_results = []
-        seen_content = set()
-        
-        # Add vector results first (higher weight - 60%)
-        for doc in vector_results[:3]:  # Take top 3 from vector
-            content_key = doc.page_content.strip()[:100]
-            if content_key not in seen_content:
-                combined_results.append(doc)
-                seen_content.add(content_key)
-        
-        # Add BM25 results to fill gaps (40%)
-        for doc in bm25_results[:2]:  # Take top 2 from BM25
-            content_key = doc.page_content.strip()[:100]
-            if content_key not in seen_content:
-                combined_results.append(doc)
-                seen_content.add(content_key)
-        
-        if not combined_results:
-            return f"No projects found matching '{query}'."
-        
-        # Format results (take top 5 unique results)
-        formatted_results = []
-        
-        for i, doc in enumerate(combined_results[:5], 1):
-            content = doc.page_content.strip()
-            source = doc.metadata.get("source", "Unknown Source")
-            doc_type = doc.metadata.get("doc_type", "document")
-            
-            formatted_results.append(
-                f"[Result {i}] ({doc_type})\n"
-                f"Source: {source}\n"
-                f"Content: {content}\n"
-                f"---"
+        # Fall back to the title, so a human-sounding name still resolves.
+        if match is None:
+            match = next((d for d in documents if d.title.lower() == needle), None)
+
+        if match is None:
+            return (
+                f"No item with id '{item_id}'. Use the catalogue ids from your "
+                "instructions, or call search_content."
             )
-        
-        logger.info(f"Found {len(formatted_results)} relevant results")
-        return "\n\n".join(formatted_results)
-        
-    except Exception as e:
-        logger.error(f"Error in hybrid search: {e}", exc_info=True)
-        return f"Error searching projects: {str(e)}"
+
+        lines = [f"# {match.title}", f"url: {SITE_URL}{match.url}"]
+        if match.description:
+            lines.append(f"summary: {match.description}")
+        if match.technologies:
+            lines.append(f"technologies: {', '.join(match.technologies)}")
+        when = match.extra.get("year") or match.date
+        if when:
+            lines.append(f"when: {when}")
+        if match.body.strip():
+            lines += ["", match.body.strip()]
+        return "\n".join(lines)
+    except Exception as exc:
+        logger.error("get_content failed: %s", exc, exc_info=True)
+        return "That item could not be read right now."
+
+
+def get_cv_section(section: CvSection) -> str:
+    """Returns a section of Marcello's CV: experience, education, awards,
+    certifications, volunteer or activities.
+    """
+    try:
+        entries = [
+            d
+            for d in get_corpus().documents
+            if d.kind == "cv" and str(d.extra.get("section", "")) == section
+        ]
+        if not entries:
+            return f"No CV entries found for '{section}'."
+        return "\n\n".join(f"- {entry.body.strip()}" for entry in entries)
+    except Exception as exc:
+        logger.error("get_cv_section failed: %s", exc, exc_info=True)
+        return "The CV could not be read right now."
+
 
 def send_cv_email(email_address: str) -> str:
     """
@@ -400,4 +206,5 @@ def send_cv_email(email_address: str) -> str:
         return f"Error sending email: {str(e)}"
 
 # Export the list of tools for the agent
-tools = [get_introduction, get_profile_section, search_projects_by_tech, list_projects, get_project_details, search_projects, send_cv_email]
+tools = [search_content, get_content, get_cv_section, send_cv_email]
+

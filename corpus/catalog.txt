@@ -1,0 +1,44 @@
+# Content catalogue
+
+Everything listed here exists on marcellomartini.tech.
+Read any item in full with get_content("<id>").
+
+## Projects (10)
+- sre-agent | SRE Agent: Autonomous Kubernetes Operations (2024 - ongoing) | Autonomous agent for Kubernetes incident detection, diagnosis, and mitigation using LLMs and modular workfl... | tech: Python, LangChain, LangGraph, Kubernetes, Prometheus, Jupyter notebook, Poetry, Docker
+- interactive-portfolio-agent | Interactive Portfolio Agent (2025) | Autonomous agent designed to answer questions about my professional profile, portfolio, and expertise using... | tech: Python, LangGraph, RAG, Docker, FastAPI, Gradio, OpenAI, ChromaDB
+- aurora | Aurora (2023 - 2024) | Aurora is an empathetic and personalized AI that evolves with the user to take care of their mental wellbeing. | tech: Python, JavaScript, AWS, OpenAI, Amazon Api Gateway, Amazon Cognito, AWS Lambda, DynamoDB
+- k8s-observability-mcp | K8s Observability MCP server (2025) | A comprehensive Kubernetes observability toolkit built on the Model Context Protocol (MCP) for Site Reliabi... | tech: Model Context Protocol, Kubernetes, Prometheus, Jaeger, Neo4j, Python, Poetry
+- an2dl24-projects | Artificial Neural Network and Deep Learning Projects (2024) | Projects of the course of Artificial Neural Network and Deep Learning of the a.y. 2024/25 | tech: Python, Tensorflow, Keras, KerasCV, NumPy, Matplotlib, Seaborn, VS Code
+- home-automation | Home automation (2017 - ongoing) | Zigbee sensors, ESP8266 boards and Home Assistant running my house since 2017, now hosted on the home serve... | tech: Python, Raspberry Pi, Arduino, ESPHome, Node-RED, Home Assistant, Zigbee, MQTT
+- nlp-project | Natural Language Processing project (2025) | NLP project combining RAG, topic modeling, Gemma and T5 question answering, toxicity detection, and interac... | tech: Python, Tensorflow, NumPy, Matplotlib, Seaborn, VS Code, GitHub, Kaggle
+- web-engineering-project | Project for web engineering course (2023) | A Java Spring web platform for after-sales product management, covering serial-number batches, product regi... | tech: Java, Spring, MySQL, GitHub, HTML, Bootstrap, IntelliJ IDEA
+- SE2-Project | Software Engineering 2 Project (2023) | Requirements analysis and design for a student programming-challenge platform, with the domain model verifi... | tech: LaTeX, Alloy, UML, Overleaf, Git, GitHub
+- malbo-booking-engine | Malbo Fishing Lake — Booking Engine (2026) | WordPress site and custom booking plugin for a fishing lake, with real-time availability, Stripe payments a... | tech: Wordpress, PHP, JavaScript, Stripe, MySQL, HTML
+
+## Blog posts (5)
+- chatbot-without-a-server | The price of a chatbot on a site with no server (2026-09-10) | My site has no server and still answers questions. The agent runs free on a Hugging Face Space, a ping from...
+- how-this-site-is-built | How this site is built (2026-09-05) | This site ran on Hugo for two years and now runs on Astro. What I moved, what I refused to move, and three...
+- containers-that-run-my-home-server | Thirty three containers, zero open ports (2026-09-01) | Real HTTPS for 33 self-hosted containers with nothing forwarded on the router: loopback binds, a reverse pr...
+- terminal-from-a-git-clone | Rebuilding my terminal from a git clone (2026-08-20) | A new Mac gets my whole terminal back in one command: Ghostty, zsh with four plugins that earn their keep,...
+- tools-i-actually-use | The tools I actually use (2026-08-19) | Three small tools that changed how I work every day: chezmoi for dotfiles, Atuin for shell history, and a l...
+
+## Pages (5)
+- privacy | Privacy | What this site collects, what it does not, and which third parties are involved.
+- research | Research | Academic publications and research work by Marcello Martini — auto-updated from ORCID.
+- tools | Tools | The software I actually use every day: editor, terminal, research and focus tools, with a note on why each...
+- about | About (2021-04-23) | Learn about Marcello Martini, a software engineer and AI specialist. Discover his background, education, ce...
+- fun | Techie by Day, Explorer by Heart (2024-10-10) | Explore Marcello Martini's travels, favourite books, interests, and activities beyond software engineering...
+
+## Publications (1)
+- 10.1109/JIOT.2026.3719782 | Weakly Supervised Occupancy Prediction for HVAC Optimization in Digital Twins Smart Campuses (2026-01-01) | IEEE Internet of Things Journal 2026
+
+## Tools he uses (31)
+- code-ai: Astro, GitHub, GitHub Actions, GitHub Copilot, Hugo, OpenUsage, VS Code
+- focus: Focus Brick, Foqos
+- network: Beszel, BorgBackup, Cloudflare Pages, Cloudflare Tunnel, Dozzle, Home Assistant, Homepage, Immich, Nginx Proxy Manager, Pi-hole, Portainer, Tailscale, Uptime Kuma, n8n
+- productivity: Bitwarden, Karakeep, Raycast
+- research: Zotero
+- terminal: Atuin, Ghostty, Oh My Zsh, chezmoi
+
+## CV (17 entries)
+- sections available via get_cv_section: activities, awards, certifications, education, experience, volunteer

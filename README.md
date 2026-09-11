@@ -72,10 +72,12 @@ An autonomous agent designed to answer questions about Marcello Martini's profes
    ```
    Edit `.env` and add your `OPENAI_API_KEY`.
 
-5. **Build RAG Index & Run**
-   The application builds the RAG index on startup, but you can run it manually:
+5. **Build the index & run**
+   The index and the prompt catalogue are built from `corpus/corpus.json`, which is
+   synced from the website. The Docker image bakes them in at build time; locally
+   you build them once:
    ```bash
-   python build_rag.py
+   python build_index.py
    uvicorn api:app --reload --port 8000
    ```
    Access the UI at `http://localhost:8000`.

@@ -1,7 +1,7 @@
 """Single source for the embedding function.
 
 The index and the query side must use the same model or retrieval silently returns
-noise, so both `build_rag.py` and `tools.py` import from here.
+noise, so both `build_index.py` and `tools.py` import from here.
 """
 
 import os
