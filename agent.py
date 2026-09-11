@@ -1,4 +1,5 @@
 import os
+from collections import OrderedDict
 from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
@@ -11,17 +12,19 @@ from dotenv import load_dotenv
 
 # Import tools
 from tools import tools
+from usage_utils import MODEL_NAME, budget
 
 # Load env vars (safe to call multiple times)
 load_dotenv()
 
 # --- Models ---
-# Switching to gpt-5-nano as requested
-args = {
-    "model": "gpt-5-nano",
-    "api_key": os.getenv("OPENAI_API_KEY")
-}
-llm = ChatOpenAI(**args)
+llm = ChatOpenAI(
+    model=MODEL_NAME,
+    api_key=os.getenv("OPENAI_API_KEY"),
+    # Reasoning tokens dominate time-to-first-token on the nano models.
+    reasoning_effort="minimal",
+    stream_usage=True,
+)
 llm_with_tools = llm.bind_tools(tools)
 
 # --- State ---
@@ -37,6 +40,9 @@ try:
         AGENT_PROMPT = f.read()
 except FileNotFoundError as e:
     raise RuntimeError(f"Critical Error: Prompt file not found: {e}")
+
+# Built once so the prefix stays byte-identical and stays eligible for prompt caching.
+SYSTEM_MESSAGE = SystemMessage(content=AGENT_PROMPT)
 
 # --- Helpers ---
 def get_safe_history(messages: list[BaseMessage], k: int = 4) -> list[BaseMessage]:
@@ -61,7 +67,7 @@ def get_safe_history(messages: list[BaseMessage], k: int = 4) -> list[BaseMessag
 
 # --- Nodes ---
 
-def run_agent_reasoning(state: AgentState):
+async def run_agent_reasoning(state: AgentState):
     """
     The main reasoning node.
     It analyzes the conversation state and decides whether to call tools or proceed.
@@ -72,8 +78,9 @@ def run_agent_reasoning(state: AgentState):
     # Context Windowing: Keep last 4 messages (approx 2 turns), ensuring valid tool sequences
     recent_messages = get_safe_history(messages, k=4)
     
-    # Use the tool-bound LLM with the unified agent prompt
-    response = llm_with_tools.invoke([SystemMessage(content=AGENT_PROMPT)] + recent_messages)
+    # Must be awaited: a sync call here would block the event loop and defeat token streaming.
+    response = await llm_with_tools.ainvoke([SYSTEM_MESSAGE] + recent_messages)
+    budget.record(getattr(response, "usage_metadata", None))
     return {"messages": [response]}
 
 # --- Graph Construction ---
@@ -108,5 +115,43 @@ workflow.add_conditional_edges("agent", should_continue, {
 # Tool outputs flow back to the agent reasoning node to decide next steps
 workflow.add_edge("tools", "agent")
 
-memory = MemorySaver()
+
+class BoundedMemorySaver(MemorySaver):
+    """MemorySaver with an LRU cap.
+
+    thread_id comes from the visitor's localStorage, so without a cap the checkpointer
+    grows with every unique visitor for as long as the process lives.
+    """
+
+    def __init__(self, max_threads: int = 500) -> None:
+        super().__init__()
+        self._max_threads = max_threads
+        self._recent_threads: OrderedDict[str, None] = OrderedDict()
+
+    def _track(self, config) -> None:
+        thread_id = (config or {}).get("configurable", {}).get("thread_id")
+        if thread_id is None:
+            return
+        self._recent_threads.pop(thread_id, None)
+        self._recent_threads[thread_id] = None
+        while len(self._recent_threads) > self._max_threads:
+            oldest, _ = self._recent_threads.popitem(last=False)
+            # Eviction is best effort: a full checkpointer must never break a reply.
+            try:
+                self.delete_thread(oldest)
+            except Exception:
+                pass
+
+    def put(self, config, checkpoint, metadata, new_versions):
+        result = super().put(config, checkpoint, metadata, new_versions)
+        self._track(config)
+        return result
+
+    async def aput(self, config, checkpoint, metadata, new_versions):
+        result = await super().aput(config, checkpoint, metadata, new_versions)
+        self._track(config)
+        return result
+
+
+memory = BoundedMemorySaver(max_threads=int(os.getenv("MAX_CHAT_THREADS", "500")))
 graph = workflow.compile(checkpointer=memory)

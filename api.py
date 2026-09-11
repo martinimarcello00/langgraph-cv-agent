@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +9,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
-from usage_utils import get_today_model_usage
+from usage_utils import budget
 import uvicorn
 import gradio as gr
 from agent import graph
@@ -20,6 +21,44 @@ load_dotenv()
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+RECONCILE_INTERVAL_SECONDS = float(os.getenv("USAGE_RECONCILE_INTERVAL", "300"))
+BUDGET_MESSAGE = (
+    "I'm currently overwhelmed with fame (and API token limits). "
+    "I'm too busy right now, try again tomorrow!"
+)
+GENERIC_ERROR_MESSAGE = "Something went wrong on my side. Please try again."
+
+_reconcile_task: asyncio.Task | None = None
+
+
+def _ensure_reconcile_task() -> None:
+    """Start the background usage reconciler, and restart it if it ever dies.
+
+    Not a FastAPI lifespan hook because mounting Gradio replaces the app lifespan.
+    """
+    global _reconcile_task
+    if _reconcile_task is None or _reconcile_task.done():
+        _reconcile_task = asyncio.create_task(budget.run_periodic(RECONCILE_INTERVAL_SECONDS))
+
+
+def _sse(payload: dict) -> str:
+    """JSON-encode every event: raw markdown contains newlines, which break SSE framing."""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _text_of(content) -> str:
+    """Flatten the content blocks the reasoning models may return instead of a plain string."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return ""
+
 
 # Setup Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -49,7 +88,11 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "tokens_used_today": budget.total_tokens,
+        "daily_token_limit": budget.daily_limit,
+    }
 
 class ChatRequest(BaseModel):
     message: str
@@ -58,19 +101,14 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 @limiter.limit("5/minute")
 async def chat(request: Request, chat_request: ChatRequest):
-    try:
-        # Check Token Usage
-        daily_limit = int(os.getenv("DAILY_TOKEN_LIMIT", "50000"))
-        if daily_limit > 0:
-            usage = get_today_model_usage("gpt-5-nano")
-            current_tokens = usage.get("total_tokens", 0)
-            logger.info(f"Token Usage Check: {current_tokens}/{daily_limit}")
-            
-            if current_tokens >= daily_limit:
-                logger.warning("Daily token limit exceeded!")
-                # Funny message as requested
-                return {"response": "I'm currently overwhelmed with fame (and API token limits). I'm too busy right now, try again tomorrow!"}
+    _ensure_reconcile_task()
 
+    # In-memory comparison, so no network call sits on the request path.
+    if budget.exceeded():
+        logger.warning("Daily token limit exceeded!")
+        return {"response": BUDGET_MESSAGE}
+
+    try:
         inputs = {"messages": [("user", chat_request.message)]}
         config = {"configurable": {"thread_id": chat_request.thread_id}, "run_name": "CV Agent"}
         
@@ -79,14 +117,13 @@ async def chat(request: Request, chat_request: ChatRequest):
         
         # Extract last message
         last_msg = result["messages"][-1]
-        return {"response": last_msg.content}
+        return {"response": _text_of(last_msg.content)}
         
     except Exception as e:
         logger.error(f"Error processing chat request: {e}", exc_info=True)
-        error_str = str(e)
-        if "RESOURCE_EXHAUSTED" in error_str:
+        if "RESOURCE_EXHAUSTED" in str(e):
             raise HTTPException(status_code=429, detail="ops., too many people are asking infos about me! Try later")
-        raise HTTPException(status_code=500, detail=error_str)
+        raise HTTPException(status_code=500, detail=GENERIC_ERROR_MESSAGE)
 
 
 @app.post("/chat/stream")
@@ -94,53 +131,54 @@ async def chat(request: Request, chat_request: ChatRequest):
 async def chat_stream(request: Request, chat_request: ChatRequest):
     """
     Streaming chat endpoint for faster perceived response times.
-    Sends response chunks as they become available.
+    Emits JSON-encoded SSE events: token, tool, error, done.
     """
-    try:
-        # Check Token Usage (same as regular chat)
-        daily_limit = int(os.getenv("DAILY_TOKEN_LIMIT", "50000"))
-        if daily_limit > 0:
-            usage = get_today_model_usage("gpt-5-nano")
-            current_tokens = usage.get("total_tokens", 0)
-            logger.info(f"Token Usage Check: {current_tokens}/{daily_limit}")
-            
-            if current_tokens >= daily_limit:
-                logger.warning("Daily token limit exceeded!")
-                
-                async def error_stream():
-                    yield "data: I'm currently overwhelmed with fame (and API token limits). I'm too busy right now, try again tomorrow!\n\n"
-                    yield "data: [DONE]\n\n"
-                
-                return StreamingResponse(error_stream(), media_type="text/event-stream")
-        
-        async def generate():
-            try:
-                inputs = {"messages": [("user", chat_request.message)]}
-                config = {
-                    "configurable": {"thread_id": chat_request.thread_id},
-                    "run_name": "CV Agent Streaming"
-                }
-                
-                # Stream the graph execution
-                async for event in graph.astream(inputs, config=config):
-                    if "messages" in event and event["messages"]:
-                        last_msg = event["messages"][-1]
-                        if hasattr(last_msg, 'content') and last_msg.content:
-                            # Send content as SSE (Server-Sent Events)
-                            yield f"data: {last_msg.content}\n\n"
-                
-                yield "data: [DONE]\n\n"
-                
-            except Exception as e:
-                logger.error(f"Streaming error: {e}", exc_info=True)
-                yield f"data: Error: {str(e)}\n\n"
-                yield "data: [DONE]\n\n"
-        
-        return StreamingResponse(generate(), media_type="text/event-stream")
-        
-    except Exception as e:
-        logger.error(f"Chat stream endpoint error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    _ensure_reconcile_task()
+
+    async def generate():
+        if budget.exceeded():
+            logger.warning("Daily token limit exceeded!")
+            yield _sse({"type": "token", "v": BUDGET_MESSAGE})
+            yield _sse({"type": "done"})
+            return
+
+        try:
+            inputs = {"messages": [("user", chat_request.message)]}
+            config = {
+                "configurable": {"thread_id": chat_request.thread_id},
+                "run_name": "CV Agent Streaming"
+            }
+
+            # "messages" yields LLM tokens, "updates" yields node results.
+            async for mode, payload in graph.astream(
+                inputs, config=config, stream_mode=["messages", "updates"]
+            ):
+                if mode == "messages":
+                    chunk, metadata = payload
+                    # Skip the tools node, whose chunks are tool-call arguments.
+                    if metadata.get("langgraph_node") != "agent":
+                        continue
+                    text = _text_of(chunk.content)
+                    if text:
+                        yield _sse({"type": "token", "v": text})
+                elif mode == "updates" and "tools" in payload:
+                    for message in payload["tools"].get("messages", []):
+                        name = getattr(message, "name", None)
+                        if name:
+                            yield _sse({"type": "tool", "v": name})
+
+            yield _sse({"type": "done"})
+
+        except Exception as e:
+            logger.error(f"Streaming error: {e}", exc_info=True)
+            yield _sse({"type": "error", "v": GENERIC_ERROR_MESSAGE})
+            yield _sse({"type": "done"})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # --- Gradio Chat Interface ---
