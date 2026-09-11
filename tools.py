@@ -12,15 +12,15 @@ from langchain_core.documents import Document
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+
+from embeddings import get_embeddings
 
 # --- Configuration ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSONAL_DATA_DIR = os.path.join(BASE_DIR, "personal_data")
 PROJECTS_DIR = os.path.join(PERSONAL_DATA_DIR, "projects")
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
-EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
 MAILGUN_URL = os.getenv("MAILGUN_URL")
 MAILGUN_FROM = os.getenv("MAILGUN_SENDER")
@@ -33,15 +33,7 @@ def get_vectorstore():
     Cached vector store initialization to avoid repeated loading.
     This significantly improves performance for multiple queries.
     """
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL_NAME,
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={
-            'normalize_embeddings': True,
-            'batch_size': 32
-        }
-    )
-    return Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embeddings)
+    return Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=get_embeddings())
 
 @lru_cache(maxsize=1)
 def _build_tech_stack_index():

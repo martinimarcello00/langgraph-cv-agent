@@ -1,13 +1,13 @@
 import os
-from langchain_community.document_loaders import DirectoryLoader, UnstructuredFileLoader
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+
+from embeddings import EMBEDDING_MODEL_NAME, get_embeddings
 
 # Configuration
 PROJECTS_DIR = "./personal_data/projects"
 CHROMA_DB_DIR = "./chroma_db"
-EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 
 def build_rag():
     print("🚀 Starting RAG build process...")
@@ -18,7 +18,13 @@ def build_rag():
 
     # Load documents
     print(f"📂 Loading documents from {PROJECTS_DIR}...")
-    loader = DirectoryLoader(PROJECTS_DIR, glob="**/*.md", loader_cls=UnstructuredFileLoader)
+    # TextLoader keeps the raw '#' syntax that MarkdownHeaderTextSplitter needs below.
+    loader = DirectoryLoader(
+        PROJECTS_DIR,
+        glob="**/*.md",
+        loader_cls=TextLoader,
+        loader_kwargs={"encoding": "utf-8"},
+    )
     documents = loader.load()
     print(f"✅ Loaded {len(documents)} documents")
 
@@ -67,14 +73,7 @@ def build_rag():
 
     # Initialize Embeddings with optimization
     print(f"🧠 Initializing embeddings model: {EMBEDDING_MODEL_NAME}...")
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL_NAME,
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={
-            'normalize_embeddings': True,
-            'batch_size': 32
-        }
-    )
+    embeddings = get_embeddings()
 
     # Enrich metadata
     print("🏷️ Enriching metadata...")

@@ -8,15 +8,13 @@ pyyaml
 pydantic
 python-dotenv
 requests
+httpx
 chromadb
 tiktoken
-unstructured[md]
 langchain_community
 langchain-text-splitters
-langchain-huggingface
-sentence-transformers
+fastembed
 langchain_chroma
 tqdm
 gradio
-requests
 rank-bm25

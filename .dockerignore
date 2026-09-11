@@ -1,0 +1,20 @@
+# Secrets must never end up in an image layer.
+.env
+.env.*
+!.env.example
+
+# Rebuilt inside the image; copying a stale one would append duplicate documents.
+chroma_db/
+.fastembed_cache/
+
+.git
+.github
+.gitignore
+__pycache__/
+*.py[cod]
+.venv
+venv/
+.DS_Store
+create_rag.ipynb
+.ipynb_checkpoints
+README.md

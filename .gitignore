@@ -211,3 +211,6 @@ __marimo__/
 
 # Ignore ChromaDB since it's created 
 chroma_db/
+
+# ONNX embedding model, downloaded on first use
+.fastembed_cache/
