@@ -21,8 +21,9 @@ load_dotenv()
 llm = ChatOpenAI(
     model=MODEL_NAME,
     api_key=os.getenv("OPENAI_API_KEY"),
-    # Reasoning tokens dominate time-to-first-token on the nano models.
-    reasoning_effort="minimal",
+    # Left at the default on purpose: reasoning_effort="minimal" cut latency but
+    # made the model skip tool calls on roughly two questions in three.
+    reasoning_effort=os.getenv("OPENAI_REASONING_EFFORT", "medium"),
     stream_usage=True,
 )
 llm_with_tools = llm.bind_tools(tools)
