@@ -20,11 +20,18 @@ CATALOG_PATH = os.path.join(BASE_DIR, "corpus", "catalog.txt")
 CHROMA_DB_DIR = os.path.join(BASE_DIR, "chroma_db")
 
 HEADERS = [("#", "h1"), ("##", "h2"), ("###", "h3")]
+SITE_URL = os.getenv("SITE_URL", "https://marcellomartini.tech")
 KIND_LABELS = {
     "project": "Projects",
     "post": "Blog posts",
     "page": "Pages",
     "publication": "Publications",
+}
+# Spelling the pattern out once per section beats making the model infer it.
+URL_PATTERNS = {
+    "project": "/projects/<id>/",
+    "post": "/posts/<id>/",
+    "page": "/<id>/",
 }
 
 
@@ -97,6 +104,8 @@ def build_catalog(corpus: Corpus) -> str:
         "",
         "Everything listed here exists on marcellomartini.tech.",
         'Read any item in full with get_content("<id>").',
+        "The id is for tool calls and for building links. Never show it to the user:",
+        "write the title as a link instead.",
     ]
 
     for kind in ("project", "post", "page", "publication"):
@@ -107,7 +116,12 @@ def build_catalog(corpus: Corpus) -> str:
         if kind == "post":
             docs.sort(key=lambda d: d.date or "", reverse=True)
 
-        lines += ["", f"## {KIND_LABELS[kind]} ({len(docs)})"]
+        heading = f"## {KIND_LABELS[kind]} ({len(docs)})"
+        pattern = URL_PATTERNS.get(kind)
+        if pattern:
+            heading += f"  -  link as {SITE_URL}{pattern}"
+        lines += ["", heading]
+
         for doc in docs:
             parts = [f"- {short_id(doc.id)} | {doc.title}"]
             when = doc.extra.get("year") or doc.date
@@ -120,6 +134,9 @@ def build_catalog(corpus: Corpus) -> str:
                 parts.append(f"| {summary}")
             if doc.technologies:
                 parts.append(f"| tech: {', '.join(doc.technologies[:8])}")
+            # Publications point at a DOI, so the pattern above does not apply.
+            if pattern is None:
+                parts.append(f"| url: {doc.url}")
             lines.append(" ".join(parts))
 
     tools = [d for d in corpus.documents if d.kind == "tool"]
