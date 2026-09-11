@@ -42,8 +42,16 @@ try:
 except FileNotFoundError as e:
     raise RuntimeError(f"Critical Error: Prompt file not found: {e}")
 
+# The catalogue lets the model answer "what has he written about X" with no tool
+# call, and stops it guessing at ids it cannot see.
+try:
+    with open("corpus/catalog.txt", "r") as f:
+        CATALOG = f.read()
+except FileNotFoundError as e:
+    raise RuntimeError(f"Critical Error: catalogue missing, run build_index.py: {e}")
+
 # Built once so the prefix stays byte-identical and stays eligible for prompt caching.
-SYSTEM_MESSAGE = SystemMessage(content=AGENT_PROMPT)
+SYSTEM_MESSAGE = SystemMessage(content=f"{AGENT_PROMPT}\n\n{CATALOG}")
 
 # --- Helpers ---
 def get_safe_history(messages: list[BaseMessage], k: int = 4) -> list[BaseMessage]:

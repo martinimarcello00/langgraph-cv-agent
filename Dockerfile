@@ -15,7 +15,7 @@ COPY . .
 # ephemeral disk and restarts often, so anything built at boot is paid for every time.
 ENV FASTEMBED_CACHE_DIR=/app/.fastembed_cache
 RUN python -c "from embeddings import get_embeddings; get_embeddings().embed_query('warmup')" \
-    && python build_rag.py
+    && python build_index.py
 
 # Create a user to avoid running as root (good practice, often required)
 RUN useradd -m -u 1000 user \
