@@ -5,12 +5,13 @@ Read any item in full with get_content("<id>").
 The id is for tool calls and for building links. Never show it to the user:
 write the title as a link instead.
 
-## Projects (10)  -  link as https://marcellomartini.tech/projects/<id>/
+## Projects (11)  -  link as https://marcellomartini.tech/projects/<id>/
 - sre-agent | SRE Agent: Autonomous Kubernetes Operations (2024 - ongoing) | Autonomous agent for Kubernetes incident detection, diagnosis, and mitigation using LLMs and modular workfl... | tech: Python, LangChain, LangGraph, Kubernetes, Prometheus, Jupyter notebook, Poetry, Docker
 - interactive-portfolio-agent | Interactive Portfolio Agent (2025) | Autonomous agent designed to answer questions about my professional profile, portfolio, and expertise using... | tech: Python, LangGraph, RAG, Docker, FastAPI, Gradio, OpenAI, ChromaDB
 - aurora | Aurora (2023 - 2024) | Aurora is an empathetic and personalized AI that evolves with the user to take care of their mental wellbeing. | tech: Python, JavaScript, AWS, OpenAI, Amazon Api Gateway, Amazon Cognito, AWS Lambda, DynamoDB
 - k8s-observability-mcp | K8s Observability MCP server (2025) | A comprehensive Kubernetes observability toolkit built on the Model Context Protocol (MCP) for Site Reliabi... | tech: Model Context Protocol, Kubernetes, Prometheus, Jaeger, Neo4j, Python, Poetry
 - an2dl24-projects | Artificial Neural Network and Deep Learning Projects (2024) | Projects of the course of Artificial Neural Network and Deep Learning of the a.y. 2024/25 | tech: Python, Tensorflow, Keras, KerasCV, NumPy, Matplotlib, Seaborn, VS Code
+- asma-tracker | Asma Tracker (2025 - ongoing) | A private daily asthma diary. A one minute form, the weather pinned to every entry, monthly trend charts, a... | tech: Python, Flask, Firebase, Firestore, Bootstrap, JavaScript, HTML, Render
 - home-automation | Home automation (2017 - ongoing) | Zigbee sensors, ESP8266 boards and Home Assistant running my house since 2017, now hosted on the home serve... | tech: Python, Raspberry Pi, Arduino, ESPHome, Node-RED, Home Assistant, Zigbee, MQTT
 - nlp-project | Natural Language Processing project (2025) | NLP project combining RAG, topic modeling, Gemma and T5 question answering, toxicity detection, and interac... | tech: Python, Tensorflow, NumPy, Matplotlib, Seaborn, VS Code, GitHub, Kaggle
 - web-engineering-project | Project for web engineering course (2023) | A Java Spring web platform for after-sales product management, covering serial-number batches, product regi... | tech: Java, Spring, MySQL, GitHub, HTML, Bootstrap, IntelliJ IDEA
