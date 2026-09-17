@@ -63,6 +63,13 @@ jobs:
         env:
           OPENAI_API_KEY: sk-not-used-by-these-checks
 
+      # Hugging Face paused the Space once over home lab prose in the corpus.
+      # New writing on the same subjects stops here for review rather than
+      # reaching their scanner unseen.
+      - name: Check new content against the reviewed vocabulary
+        if: steps.diff.outputs.changed == 'true'
+        run: python check_corpus_policy.py
+
       - name: Commit the new corpus
         if: steps.diff.outputs.changed == 'true'
         run: |
