@@ -13,6 +13,7 @@ from usage_utils import budget
 import uvicorn
 import gradio as gr
 from agent import graph
+from suggestions import suggestions_for
 import asyncio
 
 # Load env vars
@@ -117,7 +118,8 @@ async def chat(request: Request, chat_request: ChatRequest):
         
         # Extract last message
         last_msg = result["messages"][-1]
-        return {"response": _text_of(last_msg.content)}
+        answer = _text_of(last_msg.content)
+        return {"response": answer, "suggestions": suggestions_for(answer)}
         
     except Exception as e:
         logger.error(f"Error processing chat request: {e}", exc_info=True)
@@ -150,6 +152,7 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
             }
 
             # "messages" yields LLM tokens, "updates" yields node results.
+            answer = ""
             async for mode, payload in graph.astream(
                 inputs, config=config, stream_mode=["messages", "updates"]
             ):
@@ -160,6 +163,7 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
                         continue
                     text = _text_of(chunk.content)
                     if text:
+                        answer += text
                         yield _sse({"type": "token", "v": text})
                 elif mode == "updates" and "tools" in payload:
                     for message in payload["tools"].get("messages", []):
@@ -167,6 +171,9 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
                         if name:
                             yield _sse({"type": "tool", "v": name})
 
+            cards = suggestions_for(answer)
+            if cards:
+                yield _sse({"type": "suggestions", "v": cards})
             yield _sse({"type": "done"})
 
         except Exception as e:
