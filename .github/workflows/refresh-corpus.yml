@@ -30,10 +30,27 @@ jobs:
           cache: pip
 
       - name: Fetch the published corpus
+        env:
+          # Set when the website dispatches after a deploy. Empty for the daily
+          # run, which takes whatever is being served.
+          EXPECTED: ${{ github.event.client_payload.contentHash }}
         run: |
-          curl -sSf --retry 3 --retry-delay 5 --max-time 60 \
-            https://marcellomartini.tech/agent-corpus.json -o /tmp/corpus.json
-          echo "fetched $(wc -c < /tmp/corpus.json) bytes"
+          # A deploy reports success before the CDN stops serving the previous
+          # build. Fetching immediately would compare the old corpus with the
+          # old corpus, find no change, and end the run reporting success.
+          for attempt in $(seq 1 20); do
+            curl -sSf --retry 3 --retry-delay 5 --max-time 60 \
+              https://marcellomartini.tech/agent-corpus.json -o /tmp/corpus.json
+            SERVED=$(python -c "import json;print(json.load(open('/tmp/corpus.json'))['meta']['contentHash'])")
+            if [ -z "$EXPECTED" ] || [ "$SERVED" = "$EXPECTED" ]; then
+              echo "fetched $(wc -c < /tmp/corpus.json) bytes, hash $SERVED"
+              exit 0
+            fi
+            echo "attempt $attempt: edge still serving $SERVED, waiting for $EXPECTED"
+            sleep 15
+          done
+          echo "::error::the site never served $EXPECTED; the daily run will retry"
+          exit 1
 
       - name: Stop early if the content has not changed
         id: diff
