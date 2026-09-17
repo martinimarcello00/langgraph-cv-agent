@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: refresh-corpus
@@ -63,14 +64,44 @@ jobs:
         env:
           OPENAI_API_KEY: sk-not-used-by-these-checks
 
+      # Hugging Face paused the Space once over home lab prose in the corpus.
+      # Their review cleared that content, so this does not gate the refresh. It
+      # records anything new on the subject and opens an issue, so a repeat
+      # arrives as a notification rather than as a dead Space.
+      - name: Check new content against the reviewed vocabulary
+        id: policy
+        if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python check_corpus_policy.py | tee /tmp/policy-report.txt
+
+      - name: Record the new vocabulary
+        if: steps.diff.outputs.changed == 'true' && steps.policy.outcome == 'failure'
+        run: python check_corpus_policy.py --update
+
       - name: Commit the new corpus
         if: steps.diff.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Restricted to corpus/ on purpose: this job syncs content, never code.
-          git add corpus/corpus.json corpus/catalog.txt
+          git add corpus/corpus.json corpus/catalog.txt corpus/reviewed-vocabulary.json
           git commit -m "chore: refresh corpus from the website
 
           contentHash ${{ steps.diff.outputs.hash }}"
           git push
+
+      - name: Open an issue for the new content
+        if: steps.diff.outputs.changed == 'true' && steps.policy.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "The corpus refresh published content using tunnelling or proxy vocabulary for the first time. It is live on the Space and has been recorded in corpus/reviewed-vocabulary.json."
+            echo
+            echo "Hugging Face cleared this class of content in September: writing about such tools is permitted, using them is not. Confirm the document below is ordinary editorial writing."
+            echo
+            cat /tmp/policy-report.txt
+          } > /tmp/issue.md
+          gh issue create --title "Corpus: new content uses tunnelling vocabulary" --body-file /tmp/issue.md

@@ -1,0 +1,37 @@
+{
+  "note": "Documents whose website prose mentions tunnelling or proxy software. Reviewed with Hugging Face support and accepted as editorial content. Regenerate with: python check_corpus_policy.py --update",
+  "documents": {
+    "pages/privacy": [
+      "cloudflare"
+    ],
+    "posts/containers-that-run-my-home-server": [
+      "cloudflare",
+      "proxy",
+      "tailscale",
+      "tunnel",
+      "vpn",
+      "wireguard"
+    ],
+    "projects/home-automation": [
+      "proxy",
+      "vpn"
+    ],
+    "tools/cloudflare-pages": [
+      "cloudflare"
+    ],
+    "tools/cloudflare-tunnel": [
+      "cloudflare",
+      "tunnel"
+    ],
+    "tools/homepage": [
+      "proxy"
+    ],
+    "tools/nginx-proxy-manager": [
+      "proxy"
+    ],
+    "tools/tailscale": [
+      "tailscale",
+      "wireguard"
+    ]
+  }
+}
