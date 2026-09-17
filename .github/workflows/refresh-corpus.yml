@@ -13,6 +13,8 @@ on:
 permissions:
   contents: write
   issues: write
+  # To start the Space sync below, which a push from this job cannot.
+  actions: write
 
 concurrency:
   group: refresh-corpus
@@ -108,6 +110,16 @@ jobs:
 
           contentHash ${{ steps.diff.outputs.hash }}"
           git push
+
+      # GitHub does not start push-triggered workflows for a push made with
+      # GITHUB_TOKEN, so the sync never sees this commit and the Space keeps
+      # serving the previous corpus. workflow_dispatch is the documented
+      # exception: it always starts a run.
+      - name: Publish the new corpus to the Space
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run sync-hf-space.yml --ref main
 
       - name: Open an issue for the new content
         if: steps.diff.outputs.changed == 'true' && steps.policy.outcome == 'failure'
