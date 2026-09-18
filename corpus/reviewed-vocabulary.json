@@ -12,6 +12,9 @@
       "vpn",
       "wireguard"
     ],
+    "projects/brevis-url-shortener": [
+      "proxy"
+    ],
     "projects/home-automation": [
       "proxy",
       "vpn"

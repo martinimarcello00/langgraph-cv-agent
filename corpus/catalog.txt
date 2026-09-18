@@ -5,7 +5,7 @@ Read any item in full with get_content("<id>").
 The id is for tool calls and for building links. Never show it to the user:
 write the title as a link instead.
 
-## Projects (11)  -  link as https://marcellomartini.tech/projects/<id>/
+## Projects (12)  -  link as https://marcellomartini.tech/projects/<id>/
 - sre-agent | SRE Agent: Autonomous Kubernetes Operations (2024 - ongoing) | Autonomous agent for Kubernetes incident detection, diagnosis, and mitigation using LLMs and modular workfl... | tech: Python, LangChain, LangGraph, Kubernetes, Prometheus, Jupyter notebook, Poetry, Docker
 - interactive-portfolio-agent | Interactive Portfolio Agent (2025) | Autonomous agent designed to answer questions about my professional profile, portfolio, and expertise using... | tech: Python, LangGraph, RAG, Docker, FastAPI, Gradio, OpenAI, ChromaDB
 - aurora | Aurora (2023 - 2024) | Aurora is an empathetic and personalized AI that evolves with the user to take care of their mental wellbeing. | tech: Python, JavaScript, AWS, OpenAI, Amazon Api Gateway, Amazon Cognito, AWS Lambda, DynamoDB
@@ -17,6 +17,7 @@ write the title as a link instead.
 - web-engineering-project | Project for web engineering course (2023) | A Java Spring web platform for after-sales product management, covering serial-number batches, product regi... | tech: Java, Spring, MySQL, GitHub, HTML, Bootstrap, IntelliJ IDEA
 - SE2-Project | Software Engineering 2 Project (2023) | Requirements analysis and design for a student programming-challenge platform, with the domain model verifi... | tech: LaTeX, Alloy, UML, Overleaf, Git, GitHub
 - malbo-booking-engine | Malbo Fishing Lake — Booking Engine (2026) | WordPress site and custom booking plugin for a fishing lake, with real-time availability, Stripe payments a... | tech: Wordpress, PHP, JavaScript, Stripe, MySQL, HTML
+- brevis-url-shortener | Brevis URL Shortener (2026) | An internal URL management platform for the NECST lab, with guided short links, ownership-aware conflict ha... | tech: Python, Django, PostgreSQL, Tailwind CSS, JavaScript, SweetAlert2, Gunicorn, short.io API
 
 ## Blog posts (5)  -  link as https://marcellomartini.tech/posts/<id>/
 - chatbot-without-a-server | The price of a chatbot on a site with no server (2026-09-10) | My site has no server and still answers questions. The agent runs free on a Hugging Face Space, a ping from...
