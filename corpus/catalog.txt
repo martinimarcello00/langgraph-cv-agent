@@ -7,7 +7,7 @@ write the title as a link instead.
 
 ## Projects (12)  -  link as https://marcellomartini.tech/projects/<id>/
 - sre-agent | SRE Agent: Autonomous Kubernetes Operations (2024 - ongoing) | Autonomous agent for Kubernetes incident detection, diagnosis, and mitigation using LLMs and modular workfl... | tech: Python, LangChain, LangGraph, Kubernetes, Prometheus, Jupyter notebook, Poetry, Docker
-- interactive-portfolio-agent | Interactive Portfolio Agent (2025) | Autonomous agent designed to answer questions about my professional profile, portfolio, and expertise using... | tech: Python, LangGraph, RAG, Docker, FastAPI, Gradio, OpenAI, ChromaDB
+- interactive-portfolio-agent | Interactive Portfolio Agent (2025) | A retrieval agent that answers questions about my work with this website as its only source, re-indexed fro... | tech: Python, LangGraph, RAG, Docker, FastAPI, Gradio, OpenAI, ChromaDB
 - aurora | Aurora (2023 - 2024) | Aurora is an empathetic and personalized AI that evolves with the user to take care of their mental wellbeing. | tech: Python, JavaScript, AWS, OpenAI, Amazon Api Gateway, Amazon Cognito, AWS Lambda, DynamoDB
 - k8s-observability-mcp | K8s Observability MCP server (2025) | A comprehensive Kubernetes observability toolkit built on the Model Context Protocol (MCP) for Site Reliabi... | tech: Model Context Protocol, Kubernetes, Prometheus, Jaeger, Neo4j, Python, Poetry
 - an2dl24-projects | Artificial Neural Network and Deep Learning Projects (2024) | Projects of the course of Artificial Neural Network and Deep Learning of the a.y. 2024/25 | tech: Python, Tensorflow, Keras, KerasCV, NumPy, Matplotlib, Seaborn, VS Code
