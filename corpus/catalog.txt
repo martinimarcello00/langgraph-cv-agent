@@ -46,5 +46,5 @@ write the title as a link instead.
 - research: Zotero
 - terminal: Atuin, Ghostty, Oh My Zsh, chezmoi
 
-## CV (17 entries)
+## CV (18 entries)
 - sections available via get_cv_section: activities, awards, certifications, education, experience, volunteer
