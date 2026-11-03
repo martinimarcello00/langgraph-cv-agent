@@ -35,7 +35,8 @@ write the title as a link instead.
 - about | About (2021-04-23) | Learn about Marcello Martini, a software engineer and AI specialist. Discover his background, education, ce...
 - fun | Techie by Day, Explorer by Heart (2024-10-10) | Explore Marcello Martini's travels, favourite books, interests, and activities beyond software engineering...
 
-## Publications (1)
+## Publications (2)
+- 1 | Beyond AI in the wild: optimizing root cause analysis with Multi-Agent Systems (2026-01-01) | 2026 | url: https://hdl.handle.net/10589/250037
 - 10.1109/JIOT.2026.3719782 | Weakly Supervised Occupancy Prediction for HVAC Optimization in Digital Twins Smart Campuses (2026-01-01) | IEEE Internet of Things Journal 2026 | url: https://doi.org/10.1109/JIOT.2026.3719782
 
 ## Tools he uses (31)
